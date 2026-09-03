@@ -31,8 +31,8 @@ export default function Create() {
     try {
       const token = localStorage.getItem("token");
 
-      // Requisição para o Back-end
-      const response = await fetch("http://localhost:8000/projetos", {
+      // 1. Cria o "projeto" (mantém compatibilidade com o fluxo existente)
+      const projetoResponse = await fetch("http://localhost:8000/projetos", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -42,20 +42,41 @@ export default function Create() {
           nome_do_projeto: formData.nome_do_projeto,
           area_do_projeto: formData.area_do_projeto,
           responsavel: formData.responsavel,
-          descricao: formData.description // Enviando para a coluna 'descricao' do back
+          descricao: formData.description
         }),
       });
 
-      if (!response.ok) {
+      if (!projetoResponse.ok) {
         throw new Error("Falha ao salvar projeto no banco de dados.");
       }
 
-      const projetoSalvo = await response.json();
+      const projetoSalvo = await projetoResponse.json();
+
+      // 2. Cria a "postagem" de fato — é ela que será agendada/publicada na próxima tela
+      const postagemResponse = await fetch("http://localhost:8000/posts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          titulo: formData.nome_do_projeto,
+          conteudo: formData.description,
+          projeto_id: projetoSalvo.id_projeto,
+        }),
+      });
+
+      if (!postagemResponse.ok) {
+        throw new Error("Falha ao criar a postagem.");
+      }
+
+      const postagemSalva = await postagemResponse.json();
 
       // Salva no localStorage para a próxima tela (Publish.tsx) usar
       localStorage.setItem("projectData", JSON.stringify({
         ...formData,
-        id_projeto: projetoSalvo.id_projeto // ID que veio do banco
+        id_projeto: projetoSalvo.id_projeto,
+        postagem_id: postagemSalva.id,
       }));
 
       setLocation("/publish");
