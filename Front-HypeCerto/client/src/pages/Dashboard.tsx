@@ -11,7 +11,7 @@ const AVAILABLE_CHANNELS = ["Facebook", "Instagram", "TikTok", "YouTube", "Whats
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 3, 1)); // Abril 2025
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   
   // Filtro exclusivo para o modo lista
@@ -24,32 +24,7 @@ export default function Dashboard() {
   ];
 
   // Estado dos agendamentos
-  const [schedules, setSchedules] = useState([
-    { 
-      id: 1, day: 1, time: "14:00", 
-      title: "Promoção de Matrícula", 
-      description: "Garanta 50% de DESCONTO na matrícula até junho e comece a transformar seu futuro hoje! 🎓📚\n\nVagas limitadas - corre pra aproveitar!",
-      channels: ["Facebook", "Instagram"], 
-      status: "Agendado",
-      image: "/uplod.png"
-    },
-    { 
-      id: 2, day: 1, time: "18:00", 
-      title: "Dica de Estudo", 
-      description: "Confira essas 3 dicas incríveis para melhorar seu foco na hora de estudar. 🧠✨",
-      channels: ["YouTube"], 
-      status: "Agendado",
-      image: null
-    },
-    { 
-      id: 3, day: 5, time: "08:00", 
-      title: "Aviso de Feriado", 
-      description: "Aviso importante: Não teremos expediente neste feriado. Retornaremos na segunda-feira!",
-      channels: ["WhatsApp"], 
-      status: "Publicado",
-      image: null
-    },
-  ]);
+  const [schedules, setSchedules] = useState<any[]>([]);
 
   // Estados para o Modal de Resumo da Postagem
   const [selectedPost, setSelectedPost] = useState<typeof schedules[0] | null>(null);

@@ -10,13 +10,12 @@ export default function Create() {
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
 
-  // Nomes das chaves atualizados para bater com o Banco/Back-end
+  // Nomes das chaves mantidos, mas inicializados vazios
   const [formData, setFormData] = useState({
-    nome_do_projeto: "Desconto em Matrícula",
-    area_do_projeto: "Novos alunos",
-    responsavel: "Guilherme de Paula",
-    description:
-      "Garanta 50% de DESCONTO na matrícula até junho e comece a transformar seu futuro hoje! 🎓📚 Vagas limitadas - corre pra aproveitar!\n\n#Desconto #Matrícula #CursosProfissionalizantes #Promoção #VemPraNossaEscola",
+    nome_do_projeto: "",
+    area_do_projeto: "",
+    responsavel: "",
+    description: "",
   });
 
   const handleChange = (
@@ -106,8 +105,8 @@ export default function Create() {
                   name="nome_do_projeto"
                   value={formData.nome_do_projeto}
                   onChange={handleChange}
-                  className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-purple-500 focus:ring-purple-500"
-                  placeholder="Digite o nome do projeto"
+                  className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:ring-purple-500"
+                  placeholder="Desconto em Matrícula"
                 />
               </div>
 
@@ -120,8 +119,8 @@ export default function Create() {
                   name="responsavel"
                   value={formData.responsavel}
                   onChange={handleChange}
-                  className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-purple-500 focus:ring-purple-500"
-                  placeholder="Nome do responsável"
+                  className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:ring-purple-500"
+                  placeholder="Guilherme de Paula"
                 />
               </div>
             </div>
@@ -137,8 +136,8 @@ export default function Create() {
                   name="area_do_projeto"
                   value={formData.area_do_projeto}
                   onChange={handleChange}
-                  className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-purple-500 focus:ring-purple-500"
-                  placeholder="Ex: Marketing, Vendas"
+                  className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:ring-purple-500"
+                  placeholder="Novos alunos"
                 />
               </div>
 
@@ -164,8 +163,8 @@ export default function Create() {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500 focus:border-purple-500 focus:ring-purple-500 min-h-32"
-              placeholder="Digite a descrição da postagem..."
+              className="bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:ring-purple-500 min-h-32"
+              placeholder="Garanta 50% de DESCONTO na matrícula até junho e comece a transformar seu futuro hoje! 🎓📚 Vagas limitadas - corre pra aproveitar!&#10;&#10;#Desconto #Matrícula #CursosProfissionalizantes #Promoção #VemPraNossaEscola"
             />
           </div>
 
