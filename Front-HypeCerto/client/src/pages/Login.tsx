@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useState } from "react";
 
 export default function Login() {
@@ -14,7 +14,6 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Conecta com o seu back-end FastAPI
       const response = await fetch("http://localhost:8000/auth/login", {
         method: "POST",
         headers: {
@@ -26,13 +25,9 @@ export default function Login() {
       if (response.ok) {
         const data = await response.json();
         
-        // Salva o Token JWT real que vimos no Thunder Client
         localStorage.setItem("token", data.access_token);
-        
-        // Salva as informações do usuário (opcional, mas útil)
         localStorage.setItem("user", JSON.stringify(data.user));
 
-        // Redireciona apenas se o login for bem-sucedido
         setLocation("/dashboard");
       } else {
         const errorData = await response.json();
@@ -47,118 +42,349 @@ export default function Login() {
   };
 
   return (
-    <div 
-      className="min-h-screen flex justify-center items-center bg-cover bg-center"
-      style={{ backgroundImage: "url('/fundo.png')" }}
-    >
-      <div className="w-full max-w-[1200px] h-full flex items-center justify-between px-10 max-lg:flex-col max-lg:justify-center max-lg:p-5">
-        
-        {/* Lado esquerdo */}
-        <div className="flex-1 text-white flex flex-col justify-start items-center text-center pt-[50px] max-lg:hidden">
-          <img 
-            src="/logo1.png" 
-            alt="Logo HypeCerto" 
-            className="w-[280px] h-auto opacity-95 mb-5" 
-          />
-          <h1 className="text-[26px] mb-2.5 font-bold font-poppins">
-            Bem-vindo de volta!
-          </h1>
-          <p className="text-[14px] text-[#ccc] font-poppins">
-            Entre e continue gerenciando suas redes com automação e inteligência.
-          </p>
-        </div>
-
-        {/* Lado direito (formulário de login) */}
-        <div className="flex-1 flex justify-center items-center ml-[90px] max-lg:ml-0 max-lg:w-full max-lg:max-w-[400px]">
-          <form 
-            onSubmit={handleSubmit}
-            className="bg-transparent shadow-[0_4px_10px_rgba(76,76,76,0.3)] p-10 rounded-lg w-[350px] text-white"
-          >
-            <h2 className="text-center mb-[25px] text-[#bb86fc] font-bold text-2xl font-poppins">
-              Login
-            </h2>
-
-            {/* Mensagem de Erro Dinâmica */}
-            {error && (
-              <div className="mb-4 p-2 bg-red-500/20 border border-red-500 text-red-500 text-xs rounded text-center font-poppins">
-                {error}
-              </div>
-            )}
-
-            {/* Input E-mail */}
-            <div className="relative mb-5">
-              <input
-                type="email"
-                id="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="peer w-full p-3 border border-[#aaa] rounded-md bg-transparent text-white outline-none text-[14px] font-poppins focus:border-[#8c52ff] transition-colors"
-              />
-              <label
-                htmlFor="email"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#aaa] text-[14px] font-poppins pointer-events-none transition-all duration-300 peer-focus:top-[-10px] peer-focus:left-2 peer-focus:text-[12px] peer-focus:text-[#8c52ff] peer-focus:bg-[#2a2a2a] peer-focus:px-1 peer-focus:rounded peer-valid:top-[-10px] peer-valid:left-2 peer-valid:text-[12px] peer-valid:text-[#8c52ff] peer-valid:bg-[#2a2a2a] peer-valid:px-1 peer-valid:rounded"
-              >
-                E-mail
-              </label>
-            </div>
-
-            {/* Input Senha */}
-            <div className="relative mb-5">
-              <input
-                type="password"
-                id="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="peer w-full p-3 border border-[#aaa] rounded-md bg-transparent text-white outline-none text-[14px] font-poppins focus:border-[#8c52ff] transition-colors"
-              />
-              <label
-                htmlFor="password"
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#aaa] text-[14px] font-poppins pointer-events-none transition-all duration-300 peer-focus:top-[-10px] peer-focus:left-2 peer-focus:text-[12px] peer-focus:text-[#8c52ff] peer-focus:bg-[#2a2a2a] peer-focus:px-1 peer-focus:rounded peer-valid:top-[-10px] peer-valid:left-2 peer-valid:text-[12px] peer-valid:text-[#8c52ff] peer-valid:bg-[#2a2a2a] peer-valid:px-1 peer-valid:rounded"
-              >
-                Senha
-              </label>
-            </div>
-
-            <button 
-              type="submit"
-              disabled={loading}
-              className={`w-full p-3.5 ${loading ? 'bg-gray-500' : 'bg-[#8c52ff] hover:bg-[#7329ff]'} border-none rounded-md text-[16px] font-bold text-white cursor-pointer transition-colors duration-300 mt-2.5 font-poppins`}
-            >
-              {loading ? "Entrando..." : "Entrar"}
-            </button>
-
-            <div className="mt-5 text-center text-[13px] font-poppins">
-              <p className="text-[#aaa] mb-2">
-                Ainda não tem conta?{' '}
-                <button 
-                  type="button"
-                  onClick={() => setLocation("/signup")} 
-                  className="text-[#bb86fc] hover:underline transition-all bg-transparent border-none cursor-pointer"
-                >
-                  Cadastre-se
-                </button>
-              </p>
-              <p>
-                <button 
-                  type="button"
-                  onClick={() => setLocation("/forgot-password")}
-                  className="text-[#bb86fc] hover:underline transition-all bg-transparent border-none cursor-pointer"
-                >
-                  Esqueceu a senha?
-                </button>
-              </p>
-            </div>
-          </form>
-        </div>
-        
-      </div>
+    <div className="login-container">
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
       
-      {/* Footer */}
-      <footer className="fixed bottom-2.5 w-full text-center text-[#aaa] text-[0.9rem] font-poppins">
-        © 2025 HypeCerto
-      </footer>
+      <div className="form-side">
+        {/* Logo do lado esquerdo (formulário) */}
+        <div className="mark">
+          <img 
+            src="/logo.png" 
+            alt="Logo HypeCerto" 
+            style={{ width: '45px', height: '45px', objectFit: 'contain', borderRadius: '10px' }}
+          />
+          <span className="name">Hype<em>Certo</em></span>
+        </div>
+
+        <span className="eyebrow">ACESSO À CONTA</span>
+        <h1 style={{ marginBottom: '8px' }}>Bem-Vindo</h1>
+        <h2 style={{ color: 'var(--violet)', fontSize: '28px', fontWeight: '700' }}>
+          Muito bom ter você aqui.
+        </h2>
+        <p className="sub">Use seu e-mail e senha para acessar sua conta.</p>
+
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <div className="error-banner">
+              {error}
+            </div>
+          )}
+
+          <div className="field">
+            <label htmlFor="email">E-mail</label>
+            <input 
+              id="email" 
+              type="email" 
+              placeholder="voce@empresa.com" 
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              required
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="senha">Senha</label>
+            <input 
+              id="senha" 
+              type="password" 
+              placeholder="••••••••" 
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              required
+            />
+          </div>
+
+          <button className="submit" type="submit" disabled={loading}>
+            {loading ? "Entrando..." : "Entrar"}
+            {!loading && (
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
+              </svg>
+            )}
+          </button>
+        </form>
+
+        <div className="links">
+          <span>Ainda não tem conta? <Link href="/signup">Cadastre-se</Link></span>
+          <Link href="/forgot-password">Esqueceu a senha?</Link>
+        </div>
+
+        <p className="note">Acesso restrito à sua conta HypeCerto.</p>
+      </div>
+
+      <div className="visual">
+        <div className="ring r1"></div>
+        <div className="ring r2"></div>
+        <div className="ring r3"></div>
+
+        {/* Logo centralizada do lado direito sem a borda translúcida */}
+        <div className="badge">
+          <img 
+            src="/logo.png" 
+            alt="Ícone HypeCerto" 
+            style={{ width: '100px', height: '100px', objectFit: 'contain', borderRadius: '20px' }} 
+          />
+        </div>
+        <h2>HypeCerto</h2>
+        <p className="tag">Social Media Automation</p>
+        <p>Entre e continue gerenciando suas redes com automação e inteligência.</p>
+      </div>
     </div>
   );
 }
+
+const styles = `
+  .login-container {
+    --paper: #fbfaff;
+    --paper-2: #f4f2fa;
+    --black: #09070e;
+    --violet-deep: #2c1354;
+    --violet: #7c3aed;
+    --violet-2: #a78bfa;
+    --violet-soft: #6d28d9;
+    --ink: #1a1425;
+    --muted: #726a85;
+    --line: rgba(26,20,37,0.13);
+    
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    box-sizing: border-box;
+  }
+
+  .login-container * {
+    box-sizing: inherit;
+    margin: 0;
+    padding: 0;
+  }
+
+  .form-side {
+    width: 38%;
+    min-width: 420px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 56px;
+    background-color: var(--paper);
+    position: relative;
+    z-index: 1;
+  }
+
+  .mark {
+    display: flex; 
+    align-items: center; 
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+
+  .mark span.name { 
+    font-family: 'Sora', sans-serif; 
+    font-weight: 700; 
+    font-size: 22px; 
+    color: var(--ink); 
+  }
+  
+  .mark span.name em { 
+    font-style: normal; 
+    color: var(--violet); 
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    width: fit-content;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--violet-soft);
+    background: rgba(124,58,237,0.12);
+    padding: 7px 14px;
+    border-radius: 999px;
+    margin-bottom: 20px;
+  }
+
+  .form-side h1 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: clamp(30px, 3.2vw, 38px);
+    line-height: 1.22;
+    color: var(--ink);
+  }
+  
+  .form-side h1 span { color: var(--violet); }
+
+  .sub { 
+    margin-top: 14px; 
+    font-size: 14.5px; 
+    color: var(--muted); 
+    max-width: 36ch; 
+    line-height: 1.55; 
+  }
+
+  .form-side form { 
+    margin-top: 30px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 16px; 
+  }
+
+  .error-banner {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    text-align: center;
+    font-weight: 500;
+  }
+  
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .field label { font-size: 13px; font-weight: 500; color: var(--ink); }
+  .field input {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 14.5px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .field input:disabled {
+    background: #f9f9f9;
+    color: #a79fbb;
+    cursor: not-allowed;
+  }
+  .field input::placeholder { color: #a79fbb; }
+  .field input:focus:not(:disabled) {
+    border-color: var(--violet);
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
+  }
+
+  .submit {
+    margin-top: 8px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 8px;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--violet), #5b21b6);
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: transform .15s ease, filter .15s ease;
+    box-shadow: 0 16px 32px -14px rgba(124,58,237,0.55);
+  }
+  
+  .submit svg { width: 15px; height: 15px; }
+  .submit:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+  .submit:focus-visible { outline: 2px solid var(--violet-soft); outline-offset: 3px; }
+  .submit:disabled {
+    background: #a78bfa;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .note { 
+    margin-top: 20px; 
+    font-size: 12.5px; 
+    color: #a79fbb; 
+    text-align: center; 
+  }
+
+  .links {
+    margin-top: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .links a { color: var(--violet-soft); text-decoration: none; cursor: pointer; }
+  .links a:hover { text-decoration: underline; }
+
+  .visual {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(120% 140% at 15% 10%, var(--violet-2) 0%, var(--violet) 32%, var(--violet-deep) 62%, var(--black) 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px;
+  }
+  
+  .ring {
+    position: absolute;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 50%;
+  }
+  
+  .ring.r1 { width: 560px; height: 560px; top: -140px; right: -160px; }
+  .ring.r2 { width: 760px; height: 760px; top: -260px; right: -320px; border-color: rgba(255,255,255,0.08); }
+  .ring.r3 { width: 340px; height: 340px; bottom: -120px; left: -100px; border-color: rgba(9,7,14,0.35); }
+
+  .badge {
+    position: relative; 
+    z-index: 1;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    margin-bottom: 26px;
+  }
+
+  .visual h2 {
+    position: relative; 
+    z-index: 1;
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: clamp(26px, 3vw, 34px);
+    color: #fff;
+    line-height: 1.3;
+  }
+  
+  .visual .tag {
+    position: relative; 
+    z-index: 1;
+    margin-top: 6px;
+    font-size: 14px;
+    color: rgba(255,255,255,0.75);
+    letter-spacing: 0.01em;
+  }
+  
+  .visual p {
+    position: relative; 
+    z-index: 1;
+    margin-top: 20px;
+    font-size: 14.5px;
+    color: rgba(255,255,255,0.78);
+    max-width: 32ch;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 820px) {
+    .login-container { flex-direction: column; overflow: auto; height: auto; min-height: 100vh; }
+    .form-side { width: 100%; min-width: 0; padding: 48px 28px; }
+    .mark { margin-bottom: 40px; }
+    .visual { padding: 50px 28px; min-height: 280px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .submit { transition: none; }
+  }
+`;
