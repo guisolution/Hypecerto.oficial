@@ -12,3 +12,5 @@ pydantic-settings
 apscheduler
 Pillow
 aiofiles
+psycopg[binary]
+"bcrypt<4.0.0"

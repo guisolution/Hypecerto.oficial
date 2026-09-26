@@ -1,13 +1,6 @@
 """
 main.py
 Ponto de entrada da aplicação FastAPI — HypeCerto Backend.
-
-Inicializa:
-- CORS para comunicação com frontend React
-- Todos os routers (auth, posts, agendamentos, meta, ia, etc.)
-- Scheduler de publicação automática
-- Documentação automática (/docs e /redoc)
-- Endpoint de health check
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,63 +20,39 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 # ─────────────────────────── Lifespan ──────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Gerencia ciclo de vida da aplicação:
-    - Startup: inicia o scheduler de agendamentos
-    - Shutdown: encerra o scheduler
-    """
+    """Gerencia ciclo de vida da aplicação"""
     logger.info("🚀 HypeCerto Backend iniciando...")
     start_scheduler()
     yield
     logger.info("🛑 HypeCerto Backend encerrando...")
     stop_scheduler()
 
-
-# ─────────────────────────── App ───────────────────────────────
+# ─────────────────────────── App (CRIADO APENAS UMA VEZ) ───────
 app = FastAPI(
     title="HypeCerto API",
-    description="""
-## 🚀 HypeCerto — Plataforma SaaS de Automação de Marketing
-
-Backend completo para gerenciamento e publicação automática em redes sociais.
-
-### Funcionalidades
-- **Autenticação** JWT com bcrypt
-- **Postagens** com upload de mídia
-- **Agendamento automático** via APScheduler
-- **Integração Meta** (Facebook e Instagram Graph API)
-- **IA** para geração de legendas e ideias de conteúdo
-- **Métricas e Relatórios** consolidados
-- **Multi-canal** (Facebook, Instagram, TikTok, LinkedIn, etc.)
-
-### Modo Mock
-Defina `USE_MOCK_META_API=True` no `.env` para simular publicações
-sem fazer chamadas reais à API da Meta.
-    """,
+    description="Backend completo para gerenciamento e publicação automática em redes sociais.",
     version="1.0.0",
-    contact={
-        "name": "HypeCerto",
-        "url": "https://hypecerto.com.br",
-    },
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-
 # ─────────────────────────── CORS ──────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    # A linha abaixo é a mágica que permite o Codespaces funcionar:
+    allow_origin_regex=r"https://.*\.github\.dev", 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # ─────────────────────────── Routers ───────────────────────────
 app.include_router(auth.router)
@@ -95,11 +64,9 @@ app.include_router(channels.router)
 app.include_router(resultados.router)
 app.include_router(projetos.router)
 
-
 # ─────────────────────────── Arquivos estáticos (uploads) ──────
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
 
 # ─────────────────────────── Health Check ──────────────────────
 @app.get("/", tags=["Sistema"], summary="Health check")
@@ -111,7 +78,6 @@ def root():
         "docs": "/docs",
         "mock_meta": settings.USE_MOCK_META_API,
     }
-
 
 @app.get("/health", tags=["Sistema"], summary="Status detalhado")
 def health():
