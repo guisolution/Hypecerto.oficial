@@ -45,9 +45,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3000",
+        "http://localhost:5173", # Adicionado para o Vite
+        "http://127.0.0.1:5173", # Adicionado para o Vite
+        "http://localhost:5174", # Adicionado caso a porta 5173 esteja ocupada
+        "http://127.0.0.1:5174"
     ],
-    # A linha abaixo é a mágica que permite o Codespaces funcionar:
+    # A linha abaixo permite o funcionamento no Github Codespaces:
     allow_origin_regex=r"https://.*\.github\.dev", 
     allow_credentials=True,
     allow_methods=["*"],
