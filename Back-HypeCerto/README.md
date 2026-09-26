@@ -6,7 +6,7 @@ com integração à **Graph API da Meta** e geração de conteúdo via **IA**.
 
 ---
 
-## 📁 Estrutura do Projeto
+## 📁 Estrutura do ProjetO
 
 ```
 backend/
