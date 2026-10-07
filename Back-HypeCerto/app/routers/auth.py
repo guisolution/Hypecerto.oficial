@@ -122,3 +122,22 @@ def delete_account_bruto(body: LoginRequest, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro no banco: {str(e)}")
+
+
+# ==========================================
+# NOVA ROTA PARA O OAUTH DA META (FACEBOOK)
+# ==========================================
+@router.get("/callback/facebook", summary="Receber código de autorização da Meta")
+def facebook_oauth_callback(code: str):
+    """
+    Endpoint acessado pela Meta após o usuário autorizar o aplicativo.
+    Recebe o 'code' na URL, que deverá ser trocado pelo Access Token posteriormente.
+    """
+    
+    # Aqui você implementará a requisição para trocar o 'code' pelo Token da Meta
+    # usando a biblioteca requests ou httpx do Python.
+    
+    return {
+        "message": "Autenticação com a Meta realizada. Código recebido.",
+        "code": code
+    }
