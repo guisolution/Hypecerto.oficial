@@ -1,0 +1,3 @@
+allowBuilds:
+  inotify: true
+  pnpm: true
