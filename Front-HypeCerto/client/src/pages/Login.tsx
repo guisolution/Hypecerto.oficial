@@ -45,8 +45,8 @@ export default function Login() {
     <div className="login-container">
       <style dangerouslySetInnerHTML={{ __html: styles }} />
       
+      {/* Lado Esquerdo - Formulário Real de Login */}
       <div className="form-side">
-        {/* Logo do lado esquerdo (formulário) */}
         <div className="mark">
           <img 
             src="/logo.png" 
@@ -116,22 +116,13 @@ export default function Login() {
         <p className="note">Acesso restrito à sua conta HypeCerto.</p>
       </div>
 
+      {/* Lado Direito - Imagem ajustada com object-[75%_center] para trazer as pessoas mais para a esquerda */}
       <div className="visual">
-        <div className="ring r1"></div>
-        <div className="ring r2"></div>
-        <div className="ring r3"></div>
-
-        {/* Logo centralizada do lado direito sem a borda translúcida */}
-        <div className="badge">
-          <img 
-            src="/logo.png" 
-            alt="Ícone HypeCerto" 
-            style={{ width: '100px', height: '100px', objectFit: 'contain', borderRadius: '20px' }} 
-          />
-        </div>
-        <h2>HypeCerto</h2>
-        <p className="tag">Social Media Automation</p>
-        <p>Entre e continue gerenciando suas redes com automação e inteligência.</p>
+        <img 
+          src="/LoginBackGround.png" 
+          alt="HypeCerto Login Visual" 
+          className="w-full h-full object-cover object-[100%_center]"
+        />
       </div>
     </div>
   );
@@ -166,7 +157,7 @@ const styles = `
   }
 
   .form-side {
-    width: 38%;
+    width: 42%;
     min-width: 420px;
     display: flex;
     flex-direction: column;
@@ -175,13 +166,14 @@ const styles = `
     background-color: var(--paper);
     position: relative;
     z-index: 1;
+    overflow-y: auto;
   }
 
   .mark {
     display: flex; 
     align-items: center; 
     gap: 12px;
-    margin-bottom: 40px;
+    margin-bottom: 30px;
   }
 
   .mark span.name { 
@@ -206,21 +198,19 @@ const styles = `
     background: rgba(124,58,237,0.12);
     padding: 7px 14px;
     border-radius: 999px;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
   }
 
   .form-side h1 {
     font-family: 'Sora', sans-serif;
     font-weight: 700;
-    font-size: clamp(30px, 3.2vw, 38px);
+    font-size: clamp(28px, 3.2vw, 36px);
     line-height: 1.22;
     color: var(--ink);
   }
-  
-  .form-side h1 span { color: var(--violet); }
 
   .sub { 
-    margin-top: 14px; 
+    margin-top: 10px; 
     font-size: 14.5px; 
     color: var(--muted); 
     max-width: 36ch; 
@@ -228,7 +218,7 @@ const styles = `
   }
 
   .form-side form { 
-    margin-top: 30px; 
+    margin-top: 24px; 
     display: flex; 
     flex-direction: column; 
     gap: 16px; 
@@ -269,7 +259,7 @@ const styles = `
   }
 
   .submit {
-    margin-top: 8px;
+    margin-top: 6px;
     display: flex; 
     align-items: center; 
     justify-content: center; 
@@ -297,18 +287,18 @@ const styles = `
   }
 
   .note { 
-    margin-top: 20px; 
+    margin-top: 16px; 
     font-size: 12.5px; 
     color: #a79fbb; 
     text-align: center; 
   }
 
   .links {
-    margin-top: 22px;
+    margin-top: 18px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-size: 13px;
     color: var(--muted);
     text-align: center;
@@ -318,70 +308,19 @@ const styles = `
 
   .visual {
     flex: 1;
+    height: 100%;
     position: relative;
     overflow: hidden;
-    background: radial-gradient(120% 140% at 15% 10%, var(--violet-2) 0%, var(--violet) 32%, var(--violet-deep) 62%, var(--black) 100%);
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
-    padding: 60px;
-  }
-  
-  .ring {
-    position: absolute;
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 50%;
-  }
-  
-  .ring.r1 { width: 560px; height: 560px; top: -140px; right: -160px; }
-  .ring.r2 { width: 760px; height: 760px; top: -260px; right: -320px; border-color: rgba(255,255,255,0.08); }
-  .ring.r3 { width: 340px; height: 340px; bottom: -120px; left: -100px; border-color: rgba(9,7,14,0.35); }
-
-  .badge {
-    position: relative; 
-    z-index: 1;
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    margin-bottom: 26px;
-  }
-
-  .visual h2 {
-    position: relative; 
-    z-index: 1;
-    font-family: 'Sora', sans-serif;
-    font-weight: 700;
-    font-size: clamp(26px, 3vw, 34px);
-    color: #fff;
-    line-height: 1.3;
-  }
-  
-  .visual .tag {
-    position: relative; 
-    z-index: 1;
-    margin-top: 6px;
-    font-size: 14px;
-    color: rgba(255,255,255,0.75);
-    letter-spacing: 0.01em;
-  }
-  
-  .visual p {
-    position: relative; 
-    z-index: 1;
-    margin-top: 20px;
-    font-size: 14.5px;
-    color: rgba(255,255,255,0.78);
-    max-width: 32ch;
-    line-height: 1.6;
+    background-color: #09070e;
   }
 
   @media (max-width: 820px) {
     .login-container { flex-direction: column; overflow: auto; height: auto; min-height: 100vh; }
     .form-side { width: 100%; min-width: 0; padding: 48px 28px; }
-    .mark { margin-bottom: 40px; }
-    .visual { padding: 50px 28px; min-height: 280px; }
+    .visual { height: 350px; width: 100%; }
   }
 
   @media (prefers-reduced-motion: reduce) {
