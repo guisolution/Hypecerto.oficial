@@ -3,8 +3,10 @@
 // Utilitário para carregar o Facebook JS SDK e disparar o login OAuth
 // usado para conectar Páginas do Facebook e contas Instagram Business.
 //
-// Requer a variável de ambiente VITE_META_APP_ID (App ID criado em
-// developers.facebook.com/apps).
+// Requer as variáveis de ambiente:
+//   VITE_META_APP_ID     -> App ID criado em developers.facebook.com/apps
+//   VITE_META_CONFIG_ID  -> ID da Configuração do Login do Facebook para Empresas
+//                           (as permissões ficam definidas nessa configuração)
 
 declare global {
   interface Window {
@@ -15,16 +17,7 @@ declare global {
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
 const META_API_VERSION = (import.meta.env.VITE_META_API_VERSION as string) || "v18.0";
-
-// Permissões necessárias para listar Páginas, ler a conta Instagram
-// vinculada e publicar conteúdo.
-const LOGIN_SCOPE = [
-  "pages_show_list",
-  "pages_manage_posts",
-  "pages_read_engagement",
-  "instagram_basic",
-  "instagram_content_publish",
-].join(",");
+const META_CONFIG_ID = import.meta.env.VITE_META_CONFIG_ID as string | undefined;
 
 let sdkLoadPromise: Promise<void> | null = null;
 
@@ -77,7 +70,8 @@ export interface FacebookLoginResult {
 
 /**
  * Abre o popup de login do Facebook e resolve com o Access Token de
- * curta duração do usuário, já solicitando as permissões necessárias.
+ * curta duração do usuário. As permissões vêm da Configuração
+ * (config_id) criada no painel da Meta.
  *
  * IMPORTANTE: para o navegador não bloquear o popup, o SDK precisa já
  * estar carregado ANTES do clique (chame loadFacebookSdk() cedo, ex:
@@ -94,6 +88,12 @@ export function loginComFacebook(): Promise<FacebookLoginResult> {
     );
   }
 
+  if (!META_CONFIG_ID) {
+    return Promise.reject(
+      new Error("VITE_META_CONFIG_ID não configurado no .env do frontend.")
+    );
+  }
+
   return new Promise((resolve, reject) => {
     window.FB.login(
       (response: any) => {
@@ -103,7 +103,7 @@ export function loginComFacebook(): Promise<FacebookLoginResult> {
           reject(new Error("Login cancelado ou permissões não concedidas."));
         }
       },
-      { scope: LOGIN_SCOPE }
+      { config_id: META_CONFIG_ID }
     );
   });
 }

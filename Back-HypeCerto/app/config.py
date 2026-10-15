@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     META_APP_ID: str = ""
     META_APP_SECRET: str = ""
     META_API_VERSION: str = "v18.0"
+    PUBLIC_BASE_URL: str = ""  # URL pública do backend (usada só para Instagram)
 
     # OpenAI
     OPENAI_API_KEY: str = ""
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

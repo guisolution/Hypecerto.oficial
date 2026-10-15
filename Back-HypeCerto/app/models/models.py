@@ -7,7 +7,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Float,
     ForeignKey, JSON, Enum, BigInteger
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.sql import func
 from app.database.connection import Base
 import enum
@@ -58,6 +58,8 @@ class ContaSocial(Base):
     __tablename__ = "contas_sociais"
 
     id_conta = Column(Integer, primary_key=True, index=True)
+    id = synonym("id_conta")
+    
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     plataforma_id = Column(Integer, ForeignKey("plataformas.id_plataforma"))
     nome_conta = Column(String(255))
@@ -79,6 +81,8 @@ class Plataforma(Base):
     __tablename__ = "plataformas"
 
     id_plataforma = Column(Integer, primary_key=True, index=True)
+    id = synonym("id_plataforma")
+    
     nome = Column(String(100), nullable=False)   # Facebook, Instagram, TikTok...
     slug = Column(String(50), unique=True)
     icone_url = Column(Text)
@@ -91,8 +95,13 @@ class Projeto(Base):
     __tablename__ = "projetos"
 
     id_projeto = Column(Integer, primary_key=True, index=True)
+    id = synonym("id_projeto")
+    
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    
     nome_do_projeto = Column(String(255), nullable=False)
+    nome = synonym("nome_do_projeto")
+    
     area_do_projeto = Column(String(255))
     responsavel = Column(String(255))
     descricao = Column(Text)
@@ -108,6 +117,8 @@ class Postagem(Base):
     __tablename__ = "postagens"
 
     id_postagem = Column(Integer, primary_key=True, index=True)
+    id = synonym("id_postagem")
+    
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     projeto_id = Column(Integer, ForeignKey("projetos.id_projeto"))
     titulo = Column(String(500))
@@ -129,6 +140,8 @@ class Agendamento(Base):
     __tablename__ = "agendamentos"
 
     id_agendamento = Column(Integer, primary_key=True, index=True)
+    id = synonym("id_agendamento")
+    
     postagem_id = Column(Integer, ForeignKey("postagens.id_postagem"), nullable=False)
     conta_social_id = Column(Integer, ForeignKey("contas_sociais.id_conta"), nullable=False)
     data_agendada = Column(DateTime(timezone=True), nullable=False)
@@ -229,6 +242,8 @@ class Plano(Base):
     __tablename__ = "planos"
 
     id_plano = Column(Integer, primary_key=True, index=True)
+    id = synonym("id_plano") # Opcional adicionado para manter a mesma convenção dos demais
+    
     nome = Column(String(100), nullable=False)
     tipo = Column(String(50))           # free, pro, enterprise
     preco_mensal = Column(Float, default=0.0)
