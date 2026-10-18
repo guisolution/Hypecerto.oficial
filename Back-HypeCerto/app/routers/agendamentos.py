@@ -2,7 +2,7 @@
 routers/agendamentos.py
 Endpoints de agendamento de postagens.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -48,8 +48,8 @@ def listar_agendamentos(
     status_envio: Optional[str] = None,
     data_inicio: Optional[datetime] = None,
     data_fim: Optional[datetime] = None,
-    page: int = 1,
-    per_page: int = 50,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

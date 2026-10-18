@@ -13,7 +13,7 @@ import {
 import { CheckCircle2, Link2, Settings2, ShieldCheck, Loader2, AlertTriangle } from "lucide-react";
 import { loginComFacebook, loadFacebookSdk } from "@/lib/facebookSdk";
 
-const API_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
 
 // Redes que usam o fluxo real de login com a Meta (Facebook/Instagram).
 // As demais plataformas ainda não têm integração OAuth implementada.

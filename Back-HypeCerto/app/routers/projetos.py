@@ -22,7 +22,7 @@ def listar_projetos(
     # Filtramos por usuario_id e status 'ativo' conforme as imagens do seu banco
     projetos = db.query(Projeto).options(joinedload(Projeto.usuario)).filter(
         Projeto.usuario_id == current_user.id,
-        Projeto.status == "ativo"
+        Projeto.ativo == True  # noqa: E712
     ).order_by(Projeto.data_criacao.desc()).all()
     
     # Mapeia o nome do usuário para o campo que o frontend espera exibir
@@ -48,7 +48,7 @@ def criar_projeto(
         area_do_projeto=body.area_do_projeto,      # Coluna correta: area_do_projeto
         responsavel=body.responsavel,
         descricao=body.descricao,
-        ativo=True                # No banco a coluna chama-se 'status'
+        ativo=True,
     )
     
     db.add(novo_projeto)
@@ -95,8 +95,8 @@ def editar_projeto(
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
 
     # Atualiza os campos respeitando os nomes das colunas
-    p.nome_do_projeto = body.nome
-    p.area_do_projeto = body.area
+    p.nome_do_projeto = body.nome_do_projeto
+    p.area_do_projeto = body.area_do_projeto
     p.responsavel = body.responsavel
     p.descricao = body.descricao
     
@@ -120,7 +120,7 @@ def arquivar_projeto(
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
     
     # Em vez de excluir, alteramos o status conforme seu padrão de 'ativo'
-    p.status = "arquivado"
+    p.ativo = False
     db.commit()
     
     return {"message": "Projeto arquivado com sucesso", "success": True}

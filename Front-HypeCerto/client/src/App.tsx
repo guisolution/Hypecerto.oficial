@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Results from "./pages/Results";
 import Create from "./pages/Create";
 import Publish from "./pages/Publish";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 // Importações das novas páginas:
 import Channels from "./pages/Channels"; 
@@ -26,14 +27,14 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/forgot-password" component={ForgotPassword} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/results" component={Results} />
-      <Route path="/create" component={Create} />
-      <Route path="/publish" component={Publish} />
+      <Route path="/dashboard">{() => <ProtectedRoute component={Dashboard} />}</Route>
+      <Route path="/results">{() => <ProtectedRoute component={Results} />}</Route>
+      <Route path="/create">{() => <ProtectedRoute component={Create} />}</Route>
+      <Route path="/publish">{() => <ProtectedRoute component={Publish} />}</Route>
       
       {/* Rotas Adicionadas: */}
-      <Route path="/channels" component={Channels} />
-      <Route path="/guide" component={Guide} /> {/* <-- NOVA ROTA DO GUIA ADICIONADA AQUI */}
+      <Route path="/channels">{() => <ProtectedRoute component={Channels} />}</Route>
+      <Route path="/guide">{() => <ProtectedRoute component={Guide} />}</Route> {/* <-- NOVA ROTA DO GUIA ADICIONADA AQUI */}
       
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}

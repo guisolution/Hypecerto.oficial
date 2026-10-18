@@ -1,3 +1,4 @@
+import { API_URL } from "@/lib/api";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -31,7 +32,7 @@ export default function Create() {
       const token = localStorage.getItem("token");
 
       // 1. Cria o "projeto" (mantém compatibilidade com o fluxo existente)
-      const projetoResponse = await fetch("http://localhost:8000/projetos", {
+      const projetoResponse = await fetch(`${API_URL}/projetos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -52,7 +53,7 @@ export default function Create() {
       const projetoSalvo = await projetoResponse.json();
 
       // 2. Cria a "postagem" de fato — é ela que será agendada/publicada na próxima tela
-      const postagemResponse = await fetch("http://localhost:8000/posts", {
+      const postagemResponse = await fetch(`${API_URL}/posts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

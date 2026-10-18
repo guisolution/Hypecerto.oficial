@@ -1,3 +1,4 @@
+import { API_URL } from "@/lib/api";
 import { useLocation, Link } from "wouter";
 import { useState } from "react";
 
@@ -14,7 +15,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/auth/login", {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -249,10 +250,10 @@ const styles = `
   }
   .field input:disabled {
     background: #f9f9f9;
-    color: #a79fbb;
+    color: #6b6480;
     cursor: not-allowed;
   }
-  .field input::placeholder { color: #a79fbb; }
+  .field input::placeholder { color: #6b6480; }
   .field input:focus:not(:disabled) {
     border-color: var(--violet);
     box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
@@ -289,7 +290,7 @@ const styles = `
   .note { 
     margin-top: 16px; 
     font-size: 12.5px; 
-    color: #a79fbb; 
+    color: #6b6480; 
     text-align: center; 
   }
 
@@ -303,7 +304,7 @@ const styles = `
     color: var(--muted);
     text-align: center;
   }
-  .links a { color: var(--violet-soft); text-decoration: none; cursor: pointer; }
+  .links a { color: #6d28d9; text-decoration: underline; cursor: pointer; }
   .links a:hover { text-decoration: underline; }
 
   .visual {

@@ -1,0 +1,1608 @@
+diff --git a/Back-HypeCerto/.env.example b/Back-HypeCerto/.env.example
+new file mode 100644
+index 0000000..2de0350
+--- /dev/null
++++ b/Back-HypeCerto/.env.example
+@@ -0,0 +1,17 @@
++# Copie para .env e preencha. NUNCA versione o .env.
++DATABASE_URL=postgresql://postgres:SUA_SENHA@db.SEU_PROJECT.supabase.co:5432/postgres
++
++# OBRIGATÓRIO em produção (>= 32 caracteres aleatórios):
++#   python -c "import secrets; print(secrets.token_urlsafe(48))"
++SECRET_KEY=
++ACCESS_TOKEN_EXPIRE_MINUTES=60
++
++ENVIRONMENT=development          # use "production" no servidor
++ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
++MAX_UPLOAD_MB=25
++
++USE_MOCK_META_API=True           # False para publicar de verdade (e deixe visível na interface)
++META_APP_ID=
++META_APP_SECRET=
++META_API_VERSION=v18.0
++OPENAI_API_KEY=
+diff --git a/Back-HypeCerto/app/config.py b/Back-HypeCerto/app/config.py
+index 0813238..ae9f93e 100644
+--- a/Back-HypeCerto/app/config.py
++++ b/Back-HypeCerto/app/config.py
+@@ -3,18 +3,26 @@ config.py
+ Configurações centralizadas via pydantic-settings.
+ Lê variáveis do arquivo .env automaticamente.
+ """
++import logging
++import secrets
++from typing import List, Optional
++
++from pydantic import model_validator
+ from pydantic_settings import BaseSettings
+-from typing import List
++
++logger = logging.getLogger(__name__)
++
++_INSECURE_KEYS = {"", "dev-secret-key-change-in-production", "chave-secreta-super-segura", "changeme"}
+ 
+ 
+ class Settings(BaseSettings):
+     # Banco de dados
+     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/hypecerto"
+ 
+-    # JWT
+-    SECRET_KEY: str = "dev-secret-key-change-in-production"
++    # JWT — SEM valor padrão público. Em produção é obrigatório definir SECRET_KEY (>= 32 caracteres).
++    SECRET_KEY: Optional[str] = None
+     ALGORITHM: str = "HS256"
+-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 dias
++    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # antes: 7 dias
+ 
+     # Meta API
+     USE_MOCK_META_API: bool = True
+@@ -27,13 +35,36 @@ class Settings(BaseSettings):
+ 
+     # CORS
+     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
++    # Regex opcional (ex.: Codespaces). Só é aplicado quando ENVIRONMENT == "development".
++    ALLOWED_ORIGIN_REGEX: str = r"https://.*\.github\.dev"
++
++    # Upload
++    MAX_UPLOAD_MB: int = 25
+ 
+     # Ambiente
+     ENVIRONMENT: str = "development"
+ 
++    @property
++    def is_production(self) -> bool:
++        return self.ENVIRONMENT.lower() in ("production", "prod")
++
+     @property
+     def allowed_origins_list(self) -> List[str]:
+-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]
++        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
++
++    @model_validator(mode="after")
++    def _validate_secret(self):
++        weak = (self.SECRET_KEY or "").strip() in _INSECURE_KEYS or len(self.SECRET_KEY or "") < 32
++        if weak:
++            if self.is_production:
++                raise ValueError(
++                    "SECRET_KEY ausente ou fraca. Defina SECRET_KEY com >= 32 caracteres aleatórios "
++                    "(ex.: python -c 'import secrets; print(secrets.token_urlsafe(48))')."
++                )
++            # Desenvolvimento: chave aleatória por processo (tokens deixam de valer ao reiniciar).
++            self.SECRET_KEY = secrets.token_urlsafe(48)
++            logger.warning("SECRET_KEY não definida/fraca: usando chave aleatória temporária (apenas desenvolvimento).")
++        return self
+ 
+     class Config:
+         env_file = ".env"
+diff --git a/Back-HypeCerto/app/integrations/meta_api.py b/Back-HypeCerto/app/integrations/meta_api.py
+index 44436e9..bba258b 100644
+--- a/Back-HypeCerto/app/integrations/meta_api.py
++++ b/Back-HypeCerto/app/integrations/meta_api.py
+@@ -13,6 +13,7 @@ from typing import Optional
+ from sqlalchemy.orm import Session
+ from app.config import settings
+ from app.models.models import Agendamento, ContaSocial, Postagem, Midia
++from app.services.crypto import decrypt_token
+ import logging
+ 
+ logger = logging.getLogger(__name__)
+@@ -150,7 +151,7 @@ async def executar_publicacao(agendamento_id: int, db: Session) -> dict:
+                     raise ValueError("Conta Facebook sem page_id ou access_token configurados")
+                 resultado = await publicar_facebook(
+                     page_id=conta.page_id,
+-                    access_token=conta.access_token,
++                    access_token=decrypt_token(conta.access_token),
+                     mensagem=postagem.conteudo,
+                     imagem_url=imagem_url,
+                 )
+@@ -159,7 +160,7 @@ async def executar_publicacao(agendamento_id: int, db: Session) -> dict:
+                     raise ValueError("Conta Instagram sem ig_user_id ou access_token configurados")
+                 resultado = await publicar_instagram(
+                     ig_user_id=conta.ig_user_id,
+-                    access_token=conta.access_token,
++                    access_token=decrypt_token(conta.access_token),
+                     caption=postagem.conteudo,
+                     imagem_url=imagem_url,
+                 )
+@@ -191,11 +192,11 @@ async def executar_publicacao(agendamento_id: int, db: Session) -> dict:
+     except Exception as exc:
+         logger.error(f"Erro ao publicar agendamento {agendamento_id}: {exc}")
+         agendamento.status_envio = "erro"
+-        agendamento.erro_mensagem = str(exc)
++        agendamento.erro_mensagem = type(exc).__name__ + ": falha ao publicar (veja os logs do servidor)"
+         db.commit()
+ 
+         return {
+             "success": False,
+-            "message": f"Erro ao publicar: {str(exc)}",
++            "message": "Erro ao publicar. Tente novamente ou reconecte a conta.",
+             "mock": settings.USE_MOCK_META_API,
+         }
+diff --git a/Back-HypeCerto/app/main.py b/Back-HypeCerto/app/main.py
+index 11ece38..7934c1e 100644
+--- a/Back-HypeCerto/app/main.py
++++ b/Back-HypeCerto/app/main.py
+@@ -36,28 +36,47 @@ app = FastAPI(
+     description="Backend completo para gerenciamento e publicação automática em redes sociais.",
+     version="1.0.0",
+     lifespan=lifespan,
+-    docs_url="/docs",
+-    redoc_url="/redoc",
++    # Documentação interativa só fora de produção
++    docs_url=None if settings.is_production else "/docs",
++    redoc_url=None if settings.is_production else "/redoc",
++    openapi_url=None if settings.is_production else "/openapi.json",
+ )
+ 
+ # ─────────────────────────── CORS ──────────────────────────────
++# Origens vêm de ALLOWED_ORIGINS (.env). O regex (ex.: Codespaces) só vale em desenvolvimento.
++_origins = settings.allowed_origins_list + [
++    "http://127.0.0.1:3000", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174",
++] if not settings.is_production else settings.allowed_origins_list
++
+ app.add_middleware(
+     CORSMiddleware,
+-    allow_origins=[
+-        "http://localhost:3000",
+-        "http://127.0.0.1:3000",
+-        "http://localhost:5173", # Adicionado para o Vite
+-        "http://127.0.0.1:5173", # Adicionado para o Vite
+-        "http://localhost:5174", # Adicionado caso a porta 5173 esteja ocupada
+-        "http://127.0.0.1:5174"
+-    ],
+-    # A linha abaixo permite o funcionamento no Github Codespaces:
+-    allow_origin_regex=r"https://.*\.github\.dev", 
++    allow_origins=_origins,
++    allow_origin_regex=None if settings.is_production else settings.ALLOWED_ORIGIN_REGEX,
+     allow_credentials=True,
+-    allow_methods=["*"],
+-    allow_headers=["*"],
++    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
++    allow_headers=["Authorization", "Content-Type"],
+ )
+ 
++
++# ─────────────────────────── Cabeçalhos de segurança ───────────
++@app.middleware("http")
++async def security_headers(request, call_next):
++    response = await call_next(request)
++    response.headers.setdefault("X-Content-Type-Options", "nosniff")
++    response.headers.setdefault("X-Frame-Options", "DENY")
++    response.headers.setdefault("Referrer-Policy", "no-referrer")
++    response.headers.setdefault("Cache-Control", "no-store") if not request.url.path.startswith("/uploads") else None
++    if request.url.path.startswith("/uploads"):
++        # arquivos enviados nunca são executados como página
++        response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; media-src 'self'; sandbox"
++    else:
++        if request.url.path not in ("/docs", "/redoc"):
++            response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
++    if settings.is_production:
++        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
++    return response
++
++
+ # ─────────────────────────── Routers ───────────────────────────
+ app.include_router(auth.router)
+ app.include_router(posts.router)
+@@ -79,13 +98,13 @@ def root():
+         "status": "online",
+         "app": "HypeCerto API",
+         "version": "1.0.0",
+-        "docs": "/docs",
+-        "mock_meta": settings.USE_MOCK_META_API,
+     }
+ 
+ @app.get("/health", tags=["Sistema"], summary="Status detalhado")
+ def health():
+     from app.services.scheduler import scheduler
++    if settings.is_production:
++        return {"status": "healthy"}
+     return {
+         "status": "healthy",
+         "scheduler_running": scheduler.running,
+diff --git a/Back-HypeCerto/app/models/models.py b/Back-HypeCerto/app/models/models.py
+index 58070f8..ca1f0d1 100644
+--- a/Back-HypeCerto/app/models/models.py
++++ b/Back-HypeCerto/app/models/models.py
+@@ -7,7 +7,7 @@ from sqlalchemy import (
+     Column, Integer, String, Text, Boolean, DateTime, Float,
+     ForeignKey, JSON, Enum, BigInteger
+ )
+-from sqlalchemy.orm import relationship
++from sqlalchemy.orm import relationship, synonym
+ from sqlalchemy.sql import func
+ from app.database.connection import Base
+ import enum
+@@ -58,6 +58,7 @@ class ContaSocial(Base):
+     __tablename__ = "contas_sociais"
+ 
+     id_conta = Column(Integer, primary_key=True, index=True)
++    id = synonym("id_conta")
+     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+     plataforma_id = Column(Integer, ForeignKey("plataformas.id_plataforma"))
+     nome_conta = Column(String(255))
+@@ -79,6 +80,7 @@ class Plataforma(Base):
+     __tablename__ = "plataformas"
+ 
+     id_plataforma = Column(Integer, primary_key=True, index=True)
++    id = synonym("id_plataforma")
+     nome = Column(String(100), nullable=False)   # Facebook, Instagram, TikTok...
+     slug = Column(String(50), unique=True)
+     icone_url = Column(Text)
+@@ -91,6 +93,8 @@ class Projeto(Base):
+     __tablename__ = "projetos"
+ 
+     id_projeto = Column(Integer, primary_key=True, index=True)
++    id = synonym("id_projeto")
++    nome = synonym("nome_do_projeto")
+     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+     nome_do_projeto = Column(String(255), nullable=False)
+     area_do_projeto = Column(String(255))
+@@ -103,11 +107,16 @@ class Projeto(Base):
+     usuario = relationship("Usuario", back_populates="projetos")
+     postagens = relationship("Postagem", back_populates="projeto")
+ 
++    @property
++    def status(self):
++        return "ativo" if self.ativo else "arquivado"
++
+ 
+ class Postagem(Base):
+     __tablename__ = "postagens"
+ 
+     id_postagem = Column(Integer, primary_key=True, index=True)
++    id = synonym("id_postagem")
+     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+     projeto_id = Column(Integer, ForeignKey("projetos.id_projeto"))
+     titulo = Column(String(500))
+@@ -129,6 +138,7 @@ class Agendamento(Base):
+     __tablename__ = "agendamentos"
+ 
+     id_agendamento = Column(Integer, primary_key=True, index=True)
++    id = synonym("id_agendamento")
+     postagem_id = Column(Integer, ForeignKey("postagens.id_postagem"), nullable=False)
+     conta_social_id = Column(Integer, ForeignKey("contas_sociais.id_conta"), nullable=False)
+     data_agendada = Column(DateTime(timezone=True), nullable=False)
+diff --git a/Back-HypeCerto/app/routers/agendamentos.py b/Back-HypeCerto/app/routers/agendamentos.py
+index f7d304a..3792b36 100644
+--- a/Back-HypeCerto/app/routers/agendamentos.py
++++ b/Back-HypeCerto/app/routers/agendamentos.py
+@@ -2,7 +2,7 @@
+ routers/agendamentos.py
+ Endpoints de agendamento de postagens.
+ """
+-from fastapi import APIRouter, Depends, HTTPException, status
++from fastapi import APIRouter, Depends, HTTPException, Query, status
+ from sqlalchemy.orm import Session, joinedload
+ from typing import List, Optional
+ from datetime import datetime, timezone
+@@ -48,8 +48,8 @@ def listar_agendamentos(
+     status_envio: Optional[str] = None,
+     data_inicio: Optional[datetime] = None,
+     data_fim: Optional[datetime] = None,
+-    page: int = 1,
+-    per_page: int = 50,
++    page: int = Query(1, ge=1),
++    per_page: int = Query(50, ge=1, le=100),
+     current_user: Usuario = Depends(get_current_user),
+     db: Session = Depends(get_db),
+ ):
+diff --git a/Back-HypeCerto/app/routers/auth.py b/Back-HypeCerto/app/routers/auth.py
+index 22ff19b..c6f29e6 100644
+--- a/Back-HypeCerto/app/routers/auth.py
++++ b/Back-HypeCerto/app/routers/auth.py
+@@ -2,7 +2,7 @@
+ routers/auth.py
+ Endpoints de autenticação: login, cadastro, perfil, logout.
+ """
+-from fastapi import APIRouter, Depends, HTTPException, status
++from fastapi import APIRouter, Depends, HTTPException, Request, status
+ from sqlalchemy.orm import Session
+ from sqlalchemy import text
+ from app.services.auth_service import pwd_context
+@@ -16,25 +16,29 @@ from app.services.auth_service import (
+     create_usuario, get_usuario_by_email
+ )
+ from app.services.dependencies import get_current_user
++from app.services.rate_limit import check_rate_limit, register_failure, clear_failures
+ from app.models.models import Usuario
+ 
+ router = APIRouter(prefix="/auth", tags=["Autenticação"])
+ 
+ 
+ @router.post("/login", response_model=TokenResponse, summary="Fazer login")
+-def login(body: LoginRequest, db: Session = Depends(get_db)):
++def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+     """
+     Autentica o usuário com email e senha.
+     Retorna JWT + dados do usuário.
+     
+     Frontend usa: POST /auth/login  →  salva token no localStorage
+     """
++    check_rate_limit(request, "login", body.email)
+     user = authenticate_usuario(db, body.email, body.password)
+     if not user:
++        register_failure(request, "login", body.email)
+         raise HTTPException(
+             status_code=status.HTTP_401_UNAUTHORIZED,
+             detail="Email ou senha incorretos",
+         )
++    clear_failures(request, "login", body.email)
+ 
+     token = create_access_token({"sub": str(user.id)})
+     return {
+@@ -46,7 +50,6 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
+ 
+ @router.post("/signup", response_model=TokenResponse, status_code=201, summary="Criar conta")
+ def signup(body: SignupRequest, db: Session = Depends(get_db)):
+-    print(f"DEBUG: Nome recebido no servidor: {body.nome}")
+     """
+     Cadastra novo usuário.
+     Retorna JWT + dados do usuário criado.
+@@ -97,31 +100,32 @@ def forgot_password(email: str, db: Session = Depends(get_db)):
+         "success": True,
+     }
+ 
+-@router.delete("/delete")
+-def delete_account_bruto(body: LoginRequest, db: Session = Depends(get_db)):
+-    # 1. Busca o usuário usando SQL Puro para não ativar os Mappers quebrados
+-    result = db.execute(
+-        text("SELECT id, senha_hash FROM usuarios WHERE email = :email"),
+-        {"email": body.email}
+-    ).first()
+-
+-    if not result:
+-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+-
+-    user_id, senha_hash = result
+-
+-    # 2. Verifica a senha manualmente
+-    if not pwd_context.verify(body.password, senha_hash):
+-        raise HTTPException(status_code=401, detail="Senha incorreta")
++@router.delete("/delete", response_model=MessageResponse, summary="Excluir a própria conta")
++def delete_account(
++    body: LoginRequest,
++    request: Request,
++    current_user: Usuario = Depends(get_current_user),
++    db: Session = Depends(get_db),
++):
++    """
++    Exclui a conta do usuário AUTENTICADO. Exige JWT válido + confirmação da senha
++    (e o e-mail informado deve ser o do próprio usuário). Falhas são limitadas por rate limit.
++    """
++    email, user_id, senha_hash = current_user.email, current_user.id, current_user.senha_hash
++    check_rate_limit(request, "delete", email, limit=5)
++    senha_ok = body.email.lower() == email.lower() and pwd_context.verify(body.password, senha_hash)
++    if not senha_ok:
++        register_failure(request, "delete", email)
++        raise HTTPException(status_code=401, detail="Confirmação de senha inválida")
+ 
+-    # 3. Deleta o infeliz
+     try:
+         db.execute(text("DELETE FROM usuarios WHERE id = :id"), {"id": user_id})
+         db.commit()
+-        return {"message": "Usuário deletado com sucesso no modo bruto!"}
+-    except Exception as e:
++    except Exception:
+         db.rollback()
+-        raise HTTPException(status_code=500, detail=f"Erro no banco: {str(e)}")
++        raise HTTPException(status_code=500, detail="Não foi possível excluir a conta")
++    clear_failures(request, "delete", email)
++    return {"message": "Conta excluída com sucesso", "success": True}
+ 
+ 
+ # ==========================================
+@@ -137,7 +141,5 @@ def facebook_oauth_callback(code: str):
+     # Aqui você implementará a requisição para trocar o 'code' pelo Token da Meta
+     # usando a biblioteca requests ou httpx do Python.
+     
+-    return {
+-        "message": "Autenticação com a Meta realizada. Código recebido.",
+-        "code": code
+-    }
+\ No newline at end of file
++    # Não devolvemos o código ao cliente (evita reflexão/vazamento); a troca pelo token deve ocorrer no servidor.
++    return {"message": "Autenticação com a Meta recebida.", "success": True}
+\ No newline at end of file
+diff --git a/Back-HypeCerto/app/routers/channels.py b/Back-HypeCerto/app/routers/channels.py
+index 21d9a20..952665b 100644
+--- a/Back-HypeCerto/app/routers/channels.py
++++ b/Back-HypeCerto/app/routers/channels.py
+@@ -10,6 +10,9 @@ from app.database.connection import get_db
+ from app.schemas.schemas import ContaSocialResponse, ConectarContaRequest, MessageResponse
+ from app.services.dependencies import get_current_user
+ from app.models.models import Usuario, ContaSocial, Plataforma
++from app.services.crypto import encrypt_token
++
++NOMES_PLATAFORMAS = {"facebook": "Facebook", "instagram": "Instagram", "tiktok": "TikTok", "youtube": "YouTube", "whatsapp": "WhatsApp", "linkedin": "LinkedIn"}
+ 
+ router = APIRouter(prefix="/channels", tags=["Canais / Contas Sociais"])
+ 
+@@ -58,52 +61,49 @@ def conectar_conta(
+     No fluxo real: o frontend faz OAuth com a Meta e envia o
+     access_token resultante para este endpoint.
+     """
+-    # Busca plataforma pelo slug
+-    plataforma = db.query(Plataforma).filter(
+-        Plataforma.slug == body.plataforma_slug,
+-        Plataforma.ativa == True,
+-    ).first()
++    conta = upsert_conta(
++        db, current_user, body.plataforma_slug, body.access_token,
++        page_id=body.page_id, ig_user_id=body.ig_user_id, nome_conta=body.nome_conta,
++    )
++    db.commit()
++    db.refresh(conta)
++    return _to_response(conta)
+ 
++
++def upsert_conta(db: Session, user: Usuario, slug: str, access_token: str,
++                 page_id=None, ig_user_id=None, nome_conta=None) -> ContaSocial:
++    """Cria ou atualiza a conta social do usuário. O slug já foi validado pelo schema (lista fixa).
++    O token é gravado CRIPTOGRAFADO."""
++    plataforma = db.query(Plataforma).filter(Plataforma.slug == slug, Plataforma.ativa == True).first()  # noqa: E712
+     if not plataforma:
+-        # Cria a plataforma se não existir (para facilitar setup inicial)
+-        plataforma = Plataforma(
+-            nome=body.plataforma_slug.capitalize(),
+-            slug=body.plataforma_slug,
+-            ativa=True,
+-        )
++        plataforma = Plataforma(nome=NOMES_PLATAFORMAS[slug], slug=slug, ativa=True)
+         db.add(plataforma)
+         db.flush()
+ 
+-    # Verifica se já existe conta ativa para esta plataforma
+     existente = db.query(ContaSocial).filter(
+-        ContaSocial.usuario_id == current_user.id,
++        ContaSocial.usuario_id == user.id,
+         ContaSocial.plataforma_id == plataforma.id,
+-        ContaSocial.ativa == True,
++        ContaSocial.ativa == True,  # noqa: E712
+     ).first()
+-
+     if existente:
+-        # Atualiza tokens existentes
+-        existente.access_token = body.access_token
+-        existente.page_id = body.page_id or existente.page_id
+-        existente.ig_user_id = body.ig_user_id or existente.ig_user_id
+-        existente.nome_conta = body.nome_conta or existente.nome_conta
+-        db.commit()
+-        db.refresh(existente)
+-        return _to_response(existente)
++        existente.access_token = encrypt_token(access_token)
++        existente.page_id = page_id or existente.page_id
++        existente.ig_user_id = ig_user_id or existente.ig_user_id
++        existente.nome_conta = nome_conta or existente.nome_conta
++        return existente
+ 
+     conta = ContaSocial(
+-        usuario_id=current_user.id,
++        usuario_id=user.id,
+         plataforma_id=plataforma.id,
+-        access_token=body.access_token,
+-        page_id=body.page_id,
+-        ig_user_id=body.ig_user_id,
+-        nome_conta=body.nome_conta or body.plataforma_slug,
++        access_token=encrypt_token(access_token),
++        page_id=page_id,
++        ig_user_id=ig_user_id,
++        nome_conta=nome_conta or slug,
+         ativa=True,
+     )
+     db.add(conta)
+-    db.commit()
+-    db.refresh(conta)
+-    return _to_response(conta)
++    db.flush()
++    return conta
+ 
+ 
+ @router.delete("/{conta_id}", response_model=MessageResponse, summary="Desconectar conta social")
+diff --git a/Back-HypeCerto/app/routers/ia.py b/Back-HypeCerto/app/routers/ia.py
+index 604a06c..15bda5a 100644
+--- a/Back-HypeCerto/app/routers/ia.py
++++ b/Back-HypeCerto/app/routers/ia.py
+@@ -71,8 +71,8 @@ async def criar_ideias(
+ @router.get("/historico", response_model=List[IAResponse], summary="Histórico de sugestões IA")
+ def historico_ia(
+     tipo: Optional[str] = Query(None, description="legenda, ideia"),
+-    page: int = 1,
+-    per_page: int = 20,
++    page: int = Query(1, ge=1),
++    per_page: int = Query(20, ge=1, le=100),
+     current_user: Usuario = Depends(get_current_user),
+     db: Session = Depends(get_db),
+ ):
+diff --git a/Back-HypeCerto/app/routers/meta.py b/Back-HypeCerto/app/routers/meta.py
+index eb4aa5f..8027990 100644
+--- a/Back-HypeCerto/app/routers/meta.py
++++ b/Back-HypeCerto/app/routers/meta.py
+@@ -10,6 +10,9 @@ from app.services.dependencies import get_current_user
+ from app.models.models import Usuario, Agendamento, Postagem
+ from app.integrations.meta_api import executar_publicacao
+ from app.config import settings
++import httpx
++from pydantic import BaseModel, Field
++from app.routers.channels import upsert_conta
+ 
+ router = APIRouter(prefix="/meta", tags=["Meta API"])
+ 
+@@ -54,8 +57,60 @@ async def publicar_agora(
+     )
+ 
+ 
++class OAuthFacebookRequest(BaseModel):
++    access_token: str = Field(min_length=1, max_length=4096)
++
++
++@router.post("/oauth/facebook", summary="Conectar Facebook/Instagram a partir do token do Facebook Login")
++async def oauth_facebook(
++    body: OAuthFacebookRequest,
++    current_user: Usuario = Depends(get_current_user),
++    db: Session = Depends(get_db),
++):
++    """
++    Rota chamada por Channels.tsx após o Facebook Login. Lista as páginas do usuário
++    (e o Instagram Business vinculado) e salva as contas com token criptografado.
++    Em modo mock não chama a Meta e cria contas simuladas.
++    """
++    contas, avisos = [], []
++    if settings.USE_MOCK_META_API:
++        upsert_conta(db, current_user, "facebook", body.access_token, page_id="mock_page", nome_conta="Página (mock)")
++        upsert_conta(db, current_user, "instagram", body.access_token, ig_user_id="mock_ig", nome_conta="Instagram (mock)")
++        contas = [{"plataforma": "facebook"}, {"plataforma": "instagram"}]
++        avisos.append("Modo simulação ativo: contas fictícias foram conectadas.")
++    else:
++        url = f"https://graph.facebook.com/{settings.META_API_VERSION}/me/accounts"
++        try:
++            async with httpx.AsyncClient(timeout=20.0) as client:
++                r = await client.get(url, params={
++                    "fields": "id,name,access_token,instagram_business_account",
++                    "access_token": body.access_token,
++                })
++                r.raise_for_status()
++                paginas = r.json().get("data", [])
++        except httpx.HTTPError:
++            raise HTTPException(status_code=502, detail="Não foi possível consultar a Meta. Tente novamente.")
++        if not paginas:
++            raise HTTPException(status_code=400, detail="Nenhuma página do Facebook encontrada para esta conta.")
++        pagina = paginas[0]
++        upsert_conta(db, current_user, "facebook", pagina.get("access_token") or body.access_token,
++                     page_id=pagina["id"], nome_conta=pagina.get("name"))
++        contas.append({"plataforma": "facebook"})
++        ig = (pagina.get("instagram_business_account") or {}).get("id")
++        if ig:
++            upsert_conta(db, current_user, "instagram", pagina.get("access_token") or body.access_token,
++                         ig_user_id=ig, nome_conta=pagina.get("name"))
++            contas.append({"plataforma": "instagram"})
++        else:
++            avisos.append("Nenhuma conta Instagram Business vinculada à página.")
++        if len(paginas) > 1:
++            avisos.append("Mais de uma página encontrada; a primeira foi conectada.")
++    db.commit()
++    return {"contas": contas, "avisos": avisos}
++
++
+ @router.get("/status", summary="Status da integração Meta")
+-def status_integracao():
++def status_integracao(current_user: Usuario = Depends(get_current_user)):
+     """Retorna configuração atual da integração Meta."""
+     return {
+         "modo": "mock" if settings.USE_MOCK_META_API else "real",
+diff --git a/Back-HypeCerto/app/routers/posts.py b/Back-HypeCerto/app/routers/posts.py
+index 27e8e8a..e484d77 100644
+--- a/Back-HypeCerto/app/routers/posts.py
++++ b/Back-HypeCerto/app/routers/posts.py
+@@ -2,7 +2,7 @@
+ routers/posts.py
+ CRUD completo de postagens + upload de mídia.
+ """
+-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
++from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
+ from sqlalchemy.orm import Session, joinedload
+ from typing import List, Optional
+ from app.database.connection import get_db
+@@ -12,14 +12,52 @@ from app.schemas.schemas import (
+ from app.services.dependencies import get_current_user
+ from app.models.models import Usuario, Postagem, Agendamento, Midia, Projeto
+ import aiofiles
++import io
+ import uuid
+ import os
++from PIL import Image, UnidentifiedImageError
++from app.config import settings
+ 
+ router = APIRouter(prefix="/posts", tags=["Postagens"])
+ 
+ UPLOAD_DIR = "uploads/"
+ os.makedirs(UPLOAD_DIR, exist_ok=True)
+ 
++# Lista de permissão: extensão -> (mime canônico, tipo). Nada fora disso é aceito (html, svg, php, exe...).
++TIPOS_PERMITIDOS = {
++    ".png": ("image/png", "imagem", "PNG"),
++    ".jpg": ("image/jpeg", "imagem", "JPEG"),
++    ".jpeg": ("image/jpeg", "imagem", "JPEG"),
++    ".gif": ("image/gif", "imagem", "GIF"),
++    ".webp": ("image/webp", "imagem", "WEBP"),
++    ".mp4": ("video/mp4", "video", None),
++    ".mov": ("video/quicktime", "video", None),
++}
++
++
++def _validar_conteudo(ext: str, content: bytes) -> None:
++    """Valida o CONTEÚDO real (magic bytes), não o Content-Type enviado pelo cliente."""
++    _, tipo, fmt = TIPOS_PERMITIDOS[ext]
++    if tipo == "imagem":
++        try:
++            with Image.open(io.BytesIO(content)) as img:
++                img.verify()
++                if img.format != fmt:
++                    raise ValueError("formato diferente da extensão")
++        except (UnidentifiedImageError, ValueError, OSError, SyntaxError):
++            raise HTTPException(status_code=415, detail="Arquivo de imagem inválido ou corrompido")
++    elif content[4:8] != b"ftyp":
++        raise HTTPException(status_code=415, detail="Arquivo de vídeo inválido")
++
++
++def _projeto_do_usuario(db: Session, projeto_id, usuario_id: int) -> None:
++    """Impede vincular postagem a projeto de outro usuário."""
++    if projeto_id is None:
++        return
++    ok = db.query(Projeto).filter(Projeto.id_projeto == projeto_id, Projeto.usuario_id == usuario_id).first()
++    if not ok:
++        raise HTTPException(status_code=404, detail="Projeto não encontrado")
++
+ 
+ def _enrich_postagem(p: Postagem) -> dict:
+     """Enriquece postagem com dados relacionados para o frontend."""
+@@ -53,8 +91,8 @@ def _enrich_postagem(p: Postagem) -> dict:
+ def listar_postagens(
+     status: Optional[str] = None,
+     projeto_id: Optional[int] = None,
+-    page: int = 1,
+-    per_page: int = 20,
++    page: int = Query(1, ge=1),
++    per_page: int = Query(20, ge=1, le=100),
+     current_user: Usuario = Depends(get_current_user),
+     db: Session = Depends(get_db),
+ ):
+@@ -91,6 +129,7 @@ def criar_postagem(
+     Cria uma nova postagem.
+     Fluxo do frontend: Create → POST /posts → redireciona para /publish
+     """
++    _projeto_do_usuario(db, body.projeto_id, current_user.id)
+     postagem = Postagem(
+         usuario_id=current_user.id,
+         titulo=body.titulo,
+@@ -142,6 +181,7 @@ def editar_postagem(
+     if body.status is not None:
+         postagem.status = body.status
+     if body.projeto_id is not None:
++        _projeto_do_usuario(db, body.projeto_id, current_user.id)
+         postagem.projeto_id = body.projeto_id
+ 
+     db.commit()
+@@ -183,29 +223,38 @@ async def upload_midia(
+     if not postagem:
+         raise HTTPException(status_code=404, detail="Postagem não encontrada")
+ 
+-    # Salva arquivo
+-    ext = os.path.splitext(file.filename)[1]
++    # Valida extensão (lista de permissão), tamanho e conteúdo real
++    ext = os.path.splitext(file.filename or "")[1].lower()
++    if ext not in TIPOS_PERMITIDOS:
++        raise HTTPException(status_code=415, detail=f"Tipo de arquivo não permitido. Use: {', '.join(sorted(TIPOS_PERMITIDOS))}")
++
++    limite = settings.MAX_UPLOAD_MB * 1024 * 1024
++    content = bytearray()
++    while True:
++        chunk = await file.read(1024 * 1024)
++        if not chunk:
++            break
++        content += chunk
++        if len(content) > limite:
++            raise HTTPException(status_code=413, detail=f"Arquivo maior que {settings.MAX_UPLOAD_MB} MB")
++    content = bytes(content)
++    if not content:
++        raise HTTPException(status_code=400, detail="Arquivo vazio")
++    _validar_conteudo(ext, content)
++
++    mime, tipo, _ = TIPOS_PERMITIDOS[ext]
+     filename = f"{uuid.uuid4().hex}{ext}"
+     filepath = os.path.join(UPLOAD_DIR, filename)
+-
+     async with aiofiles.open(filepath, "wb") as f:
+-        content = await file.read()
+         await f.write(content)
+ 
+-    # Determina tipo de mídia
+-    tipo = "imagem"
+-    if file.content_type and "video" in file.content_type:
+-        tipo = "video"
+-    elif file.content_type and "audio" in file.content_type:
+-        tipo = "audio"
+-
+     midia = Midia(
+         postagem_id=post_id,
+         tipo=tipo,
+         url=f"/uploads/{filename}",
+-        nome_arquivo=file.filename,
++        nome_arquivo=os.path.basename(file.filename or filename)[:255],
+         tamanho_bytes=len(content),
+-        mime_type=file.content_type,
++        mime_type=mime,
+     )
+     db.add(midia)
+     db.commit()
+diff --git a/Back-HypeCerto/app/routers/projetos.py b/Back-HypeCerto/app/routers/projetos.py
+index 6986637..2e904ed 100644
+--- a/Back-HypeCerto/app/routers/projetos.py
++++ b/Back-HypeCerto/app/routers/projetos.py
+@@ -22,7 +22,7 @@ def listar_projetos(
+     # Filtramos por usuario_id e status 'ativo' conforme as imagens do seu banco
+     projetos = db.query(Projeto).options(joinedload(Projeto.usuario)).filter(
+         Projeto.usuario_id == current_user.id,
+-        Projeto.status == "ativo"
++        Projeto.ativo == True  # noqa: E712
+     ).order_by(Projeto.data_criacao.desc()).all()
+     
+     # Mapeia o nome do usuário para o campo que o frontend espera exibir
+@@ -48,7 +48,7 @@ def criar_projeto(
+         area_do_projeto=body.area_do_projeto,      # Coluna correta: area_do_projeto
+         responsavel=body.responsavel,
+         descricao=body.descricao,
+-        ativo=True                # No banco a coluna chama-se 'status'
++        ativo=True,
+     )
+     
+     db.add(novo_projeto)
+@@ -95,8 +95,8 @@ def editar_projeto(
+         raise HTTPException(status_code=404, detail="Projeto não encontrado")
+ 
+     # Atualiza os campos respeitando os nomes das colunas
+-    p.nome_do_projeto = body.nome
+-    p.area_do_projeto = body.area
++    p.nome_do_projeto = body.nome_do_projeto
++    p.area_do_projeto = body.area_do_projeto
+     p.responsavel = body.responsavel
+     p.descricao = body.descricao
+     
+@@ -120,7 +120,7 @@ def arquivar_projeto(
+         raise HTTPException(status_code=404, detail="Projeto não encontrado")
+     
+     # Em vez de excluir, alteramos o status conforme seu padrão de 'ativo'
+-    p.status = "arquivado"
++    p.ativo = False
+     db.commit()
+     
+     return {"message": "Projeto arquivado com sucesso", "success": True}
+\ No newline at end of file
+diff --git a/Back-HypeCerto/app/routers/resultados.py b/Back-HypeCerto/app/routers/resultados.py
+index fa83519..757e19d 100644
+--- a/Back-HypeCerto/app/routers/resultados.py
++++ b/Back-HypeCerto/app/routers/resultados.py
+@@ -6,7 +6,7 @@ Compatível com Results.tsx e Dashboard.tsx do frontend.
+ from fastapi import APIRouter, Depends, Query
+ from sqlalchemy.orm import Session
+ from sqlalchemy import func
+-from typing import List, Optional
++from typing import List, Literal, Optional
+ from datetime import datetime, timedelta, timezone
+ from app.database.connection import get_db
+ from app.schemas.schemas import (
+@@ -82,11 +82,6 @@ def dashboard_metricas(
+             )
+             .scalar() or 0
+         )
+-        # Usa valor mock > 0 se não houver dados ainda (melhora visualização no demo)
+-        if count == 0 and total_postagens == 0:
+-            import random
+-            count = random.randint(30, 70)
+-
+         atividade_semanal.append({
+             "name": dias_semana[dia.weekday()],
+             "value": count,
+@@ -132,8 +127,8 @@ def dashboard_metricas(
+ @router.get("/metricas", response_model=List[MetricaResponse], summary="Listar métricas")
+ def listar_metricas(
+     postagem_id: Optional[int] = None,
+-    page: int = 1,
+-    per_page: int = 20,
++    page: int = Query(1, ge=1),
++    per_page: int = Query(20, ge=1, le=100),
+     current_user: Usuario = Depends(get_current_user),
+     db: Session = Depends(get_db),
+ ):
+@@ -173,7 +168,7 @@ def listar_relatorios(
+ 
+ @router.post("/relatorios/gerar", response_model=RelatorioResponse, summary="Gerar relatório")
+ def gerar_relatorio(
+-    tipo: str = Query("mensal", description="semanal, mensal, campanha"),
++    tipo: Literal["semanal", "mensal", "campanha"] = Query("mensal", description="semanal, mensal, campanha"),
+     current_user: Usuario = Depends(get_current_user),
+     db: Session = Depends(get_db),
+ ):
+diff --git a/Back-HypeCerto/app/schemas/schemas.py b/Back-HypeCerto/app/schemas/schemas.py
+index 9be7e92..f249d89 100644
+--- a/Back-HypeCerto/app/schemas/schemas.py
++++ b/Back-HypeCerto/app/schemas/schemas.py
+@@ -3,9 +3,10 @@ schemas/schemas.py
+ Schemas Pydantic para validação de request/response da API REST.
+ Estrutura compatível com o que o frontend React consome via Axios/Fetch.
+ """
+-from pydantic import BaseModel, EmailStr, field_validator
+-from typing import Optional, List, Any, Dict
+-from datetime import datetime
++from pydantic import BaseModel, EmailStr, Field, field_validator
++from typing import Optional, List, Any, Dict, Literal
++from datetime import datetime, timezone
++import re
+ 
+ 
+ # ═══════════════════════════════════════════════
+@@ -14,16 +15,33 @@ from datetime import datetime
+ 
+ class LoginRequest(BaseModel):
+     email: EmailStr
+-    password: str
++    password: str = Field(min_length=1, max_length=128)
+ 
+ 
+ class SignupRequest(BaseModel):
+-    nome: str
++    nome: str = Field(min_length=1, max_length=120)
+     email: EmailStr
+-    password: str
++    password: str = Field(min_length=8, max_length=72)   # 72 = limite do bcrypt (sem truncamento silencioso)
+     confirmPassword: str
+-    telefone: Optional[str] = None
+-    plan: Optional[str] = "free"
++    telefone: Optional[str] = Field(default=None, max_length=30)
++    plan: Optional[Literal["free", "pro", "enterprise"]] = "free"
++
++    @field_validator("nome")
++    @classmethod
++    def nome_valido(cls, v):
++        v = v.strip()
++        if not v:
++            raise ValueError("Nome não pode ser vazio")
++        return v
++
++    @field_validator("password")
++    @classmethod
++    def senha_forte(cls, v):
++        if len(v.encode("utf-8")) > 72:
++            raise ValueError("Senha excede 72 bytes")
++        if not (re.search(r"[A-Z]", v) and re.search(r"[a-z]", v) and re.search(r"[0-9]", v)):
++            raise ValueError("A senha deve conter maiúscula, minúscula e número")
++        return v
+ 
+     @field_validator("confirmPassword")
+     @classmethod
+@@ -71,12 +89,15 @@ class ContaSocialResponse(BaseModel):
+         from_attributes = True
+ 
+ 
++PLATAFORMAS_PERMITIDAS = ("facebook", "instagram", "tiktok", "youtube", "whatsapp", "linkedin")
++
++
+ class ConectarContaRequest(BaseModel):
+-    plataforma_slug: str           # facebook, instagram, tiktok...
+-    access_token: str
+-    page_id: Optional[str] = None
+-    ig_user_id: Optional[str] = None
+-    nome_conta: Optional[str] = None
++    plataforma_slug: Literal["facebook", "instagram", "tiktok", "youtube", "whatsapp", "linkedin"]
++    access_token: str = Field(min_length=1, max_length=4096)
++    page_id: Optional[str] = Field(default=None, max_length=255)
++    ig_user_id: Optional[str] = Field(default=None, max_length=255)
++    nome_conta: Optional[str] = Field(default=None, max_length=255)
+     permissions: Optional[Dict[str, bool]] = None
+ 
+ 
+@@ -85,17 +106,22 @@ class ConectarContaRequest(BaseModel):
+ # ═══════════════════════════════════════════════
+ 
+ class ProjetoCreate(BaseModel):
+-    nome_do_projeto: str  # Nome exato da coluna no banco
+-    area_do_projeto: Optional[str] = None
+-    responsavel: Optional[str] = None
+-    descricao: Optional[str] = None
++    nome_do_projeto: str = Field(min_length=1, max_length=255)
++    area_do_projeto: Optional[str] = Field(default=None, max_length=255)
++    responsavel: Optional[str] = Field(default=None, max_length=255)
++    descricao: Optional[str] = Field(default=None, max_length=5000)
+ 
+ 
+ class ProjetoResponse(BaseModel):
+     id_projeto: int
+     usuario_id: int
+-    data_criacao: datetime
++    nome_do_projeto: Optional[str] = None
++    area_do_projeto: Optional[str] = None
++    responsavel: Optional[str] = None
++    descricao: Optional[str] = None
++    data_criacao: Optional[datetime] = None
+     status: Optional[str] = "ativo"
++    nome_usuario: Optional[str] = None
+ 
+     class Config:
+         from_attributes = True
+@@ -106,16 +132,17 @@ class ProjetoResponse(BaseModel):
+ # ═══════════════════════════════════════════════
+ 
+ class PostagemCreate(BaseModel):
+-    titulo: Optional[str] = None
+-    conteudo: str
++    titulo: Optional[str] = Field(default=None, max_length=500)
++    conteudo: str = Field(min_length=1, max_length=20000)
+     projeto_id: Optional[int] = None
+     tags: Optional[List[int]] = []
+ 
+ 
+ class PostagemUpdate(BaseModel):
+-    titulo: Optional[str] = None
+-    conteudo: Optional[str] = None
+-    status: Optional[str] = None
++    titulo: Optional[str] = Field(default=None, max_length=500)
++    conteudo: Optional[str] = Field(default=None, min_length=1, max_length=20000)
++    # 'publicado' e 'erro' só são definidos pelo sistema ao publicar, nunca pelo cliente
++    status: Optional[Literal["rascunho", "agendado"]] = None
+     projeto_id: Optional[int] = None
+ 
+ 
+@@ -160,15 +187,34 @@ class PostagemResponse(BaseModel):
+ #  AGENDAMENTOS
+ # ═══════════════════════════════════════════════
+ 
++def _futuro(v: datetime) -> datetime:
++    if v.tzinfo is None:
++        v = v.replace(tzinfo=timezone.utc)
++    if v < datetime.now(timezone.utc):
++        raise ValueError("data_agendada deve estar no futuro")
++    return v
++
++
+ class AgendamentoCreate(BaseModel):
+     postagem_id: int
+     conta_social_id: int
+     data_agendada: datetime
+ 
++    @field_validator("data_agendada")
++    @classmethod
++    def _data_futura(cls, v):
++        return _futuro(v)
++
+ 
+ class AgendamentoUpdate(BaseModel):
+     data_agendada: Optional[datetime] = None
+-    status_envio: Optional[str] = None
++    # o cliente só pode cancelar ou reagendar; 'publicado'/'erro' são definidos pelo sistema
++    status_envio: Optional[Literal["agendado", "cancelado"]] = None
++
++    @field_validator("data_agendada")
++    @classmethod
++    def _data_futura(cls, v):
++        return _futuro(v) if v is not None else v
+ 
+ 
+ class AgendamentoResponse(BaseModel):
+@@ -213,16 +259,23 @@ class PublicarResponse(BaseModel):
+ # ═══════════════════════════════════════════════
+ 
+ class IALegendaRequest(BaseModel):
+-    tema: str
+-    plataforma: Optional[str] = "instagram"
+-    tom: Optional[str] = "engajador"     # engajador, profissional, divertido, informativo
+-    incluir_hashtags: Optional[bool] = True
++    tema: str = Field(min_length=1, max_length=300)
++    plataforma: Literal["instagram", "facebook", "linkedin", "tiktok", "youtube", "whatsapp"] = "instagram"
++    tom: Literal["engajador", "profissional", "divertido", "informativo"] = "engajador"
++    incluir_hashtags: bool = True
++
++    @field_validator("plataforma", "tom", "incluir_hashtags", mode="before")
++    @classmethod
++    def _null_vira_padrao(cls, v, info):
++        if v is None:
++            return {"plataforma": "instagram", "tom": "engajador", "incluir_hashtags": True}[info.field_name]
++        return v
+ 
+ 
+ class IAIdeiasRequest(BaseModel):
+-    segmento: str
+-    quantidade: Optional[int] = 5
+-    plataforma: Optional[str] = None
++    segmento: str = Field(min_length=1, max_length=300)
++    quantidade: int = Field(default=5, ge=1, le=10)
++    plataforma: Optional[Literal["instagram", "facebook", "linkedin", "tiktok", "youtube", "whatsapp"]] = None
+ 
+ 
+ class IAResponse(BaseModel):
+diff --git a/Back-HypeCerto/app/services/auth_service.py b/Back-HypeCerto/app/services/auth_service.py
+index 32f1aec..09e1487 100644
+--- a/Back-HypeCerto/app/services/auth_service.py
++++ b/Back-HypeCerto/app/services/auth_service.py
+@@ -4,7 +4,8 @@ Serviço de autenticação: hashing de senha, criação e validação de JWT.
+ """
+ from datetime import datetime, timedelta, timezone
+ from typing import Optional
+-from jose import JWTError, jwt
++import jwt
++from jwt import PyJWTError as JWTError
+ from passlib.context import CryptContext
+ from sqlalchemy.orm import Session
+ from fastapi import HTTPException, status
+@@ -15,10 +16,14 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+ 
+ 
+ def hash_password(password: str) -> str:
++    if len(password.encode("utf-8")) > 72:
++        raise ValueError("Senha excede 72 bytes (limite do bcrypt)")
+     return pwd_context.hash(password)
+ 
+ 
+ def verify_password(plain_password: str, hashed_password: str) -> bool:
++    if len(plain_password.encode("utf-8")) > 72:
++        return False
+     return pwd_context.verify(plain_password, hashed_password)
+ 
+ 
+@@ -33,7 +38,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
+ 
+ def decode_token(token: str) -> dict:
+     try:
+-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
++        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"require": ["exp", "sub"]})
+         return payload
+     except JWTError:
+         raise HTTPException(
+@@ -47,9 +52,13 @@ def get_usuario_by_email(db: Session, email: str) -> Optional[Usuario]:
+     return db.query(Usuario).filter(Usuario.email == email).first()
+ 
+ 
++_DUMMY_HASH = pwd_context.hash("dummy-password-for-timing")
++
++
+ def authenticate_usuario(db: Session, email: str, password: str) -> Optional[Usuario]:
+     user = get_usuario_by_email(db, email)
+     if not user:
++        pwd_context.verify(password, _DUMMY_HASH)  # mesmo custo de tempo: evita enumeração por timing
+         return None
+     if not verify_password(password, user.senha_hash):
+         return None
+diff --git a/Back-HypeCerto/app/services/crypto.py b/Back-HypeCerto/app/services/crypto.py
+new file mode 100644
+index 0000000..edf2943
+--- /dev/null
++++ b/Back-HypeCerto/app/services/crypto.py
+@@ -0,0 +1,34 @@
++"""
++services/crypto.py
++Criptografia em repouso (Fernet) para tokens OAuth de redes sociais.
++A chave é derivada de TOKEN_ENCRYPTION_KEY (se definida) ou, na falta dela, de SECRET_KEY.
++"""
++import base64
++import hashlib
++import os
++
++from cryptography.fernet import Fernet, InvalidToken
++
++from app.config import settings
++
++_PREFIX = "enc:v1:"
++
++
++def _fernet() -> Fernet:
++    raw = os.getenv("TOKEN_ENCRYPTION_KEY") or settings.SECRET_KEY
++    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(raw.encode()).digest()))
++
++
++def encrypt_token(value):
++    if not value or value.startswith(_PREFIX):
++        return value
++    return _PREFIX + _fernet().encrypt(value.encode()).decode()
++
++
++def decrypt_token(value):
++    if not value or not value.startswith(_PREFIX):
++        return value  # legado em texto claro
++    try:
++        return _fernet().decrypt(value[len(_PREFIX):].encode()).decode()
++    except InvalidToken:
++        return None
+diff --git a/Back-HypeCerto/app/services/dependencies.py b/Back-HypeCerto/app/services/dependencies.py
+index 505c167..4ff75ae 100644
+--- a/Back-HypeCerto/app/services/dependencies.py
++++ b/Back-HypeCerto/app/services/dependencies.py
+@@ -25,7 +25,10 @@ def get_current_user(
+     4. Retorna o objeto Usuario ou lança 401
+     """
+     payload = decode_token(credentials.credentials)
+-    user_id: int = payload.get("sub")
++    try:
++        user_id = int(payload.get("sub"))
++    except (TypeError, ValueError):
++        user_id = None
+ 
+     if user_id is None:
+         raise HTTPException(
+@@ -34,7 +37,7 @@ def get_current_user(
+         )
+ 
+     user = db.query(Usuario).filter(
+-        Usuario.id == int(user_id),
++        Usuario.id == user_id,
+         #Usuario.ativo == True,
+     ).first()
+ 
+diff --git a/Back-HypeCerto/app/services/rate_limit.py b/Back-HypeCerto/app/services/rate_limit.py
+new file mode 100644
+index 0000000..e2715bd
+--- /dev/null
++++ b/Back-HypeCerto/app/services/rate_limit.py
+@@ -0,0 +1,50 @@
++"""
++services/rate_limit.py
++Limitador em memória (janela deslizante) para rotas sensíveis (login, exclusão de conta).
++Conta apenas FALHAS por (escopo, IP, identificador). Para vários workers/instâncias, troque o
++armazenamento por Redis mantendo esta interface.
++"""
++import time
++from collections import defaultdict, deque
++from threading import Lock
++
++from fastapi import HTTPException, Request, status
++
++_lock = Lock()
++_hits: dict = defaultdict(deque)
++
++
++def _key(request: Request, scope: str, ident: str) -> str:
++    ip = request.client.host if request.client else "unknown"
++    return f"{scope}:{ip}:{ident.lower()}"
++
++
++def check_rate_limit(request: Request, scope: str, ident: str = "", limit: int = 5, window_s: int = 900) -> None:
++    """Levanta 429 se já houve `limit` falhas na janela."""
++    key, now = _key(request, scope, ident), time.monotonic()
++    with _lock:
++        q = _hits[key]
++        while q and now - q[0] > window_s:
++            q.popleft()
++        if len(q) >= limit:
++            raise HTTPException(
++                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
++                detail="Muitas tentativas. Tente novamente mais tarde.",
++                headers={"Retry-After": str(int(window_s - (now - q[0])) + 1)},
++            )
++
++
++def register_failure(request: Request, scope: str, ident: str = "") -> None:
++    with _lock:
++        _hits[_key(request, scope, ident)].append(time.monotonic())
++
++
++def clear_failures(request: Request, scope: str, ident: str = "") -> None:
++    with _lock:
++        _hits.pop(_key(request, scope, ident), None)
++
++
++def reset_rate_limits() -> None:
++    """Uso em testes."""
++    with _lock:
++        _hits.clear()
+diff --git a/Back-HypeCerto/requirements.txt b/Back-HypeCerto/requirements.txt
+index 9d930d7..51ebf67 100644
+--- a/Back-HypeCerto/requirements.txt
++++ b/Back-HypeCerto/requirements.txt
+@@ -3,7 +3,8 @@ uvicorn[standard]
+ sqlalchemy
+ alembic
+ psycopg[binary]
+-python-jose[cryptography]
++PyJWT>=2.8
++cryptography
+ passlib[bcrypt]
+ bcrypt<4.0.0
+ python-multipart
+diff --git a/Back-HypeCerto/run.py b/Back-HypeCerto/run.py
+index e124911..c985724 100644
+--- a/Back-HypeCerto/run.py
++++ b/Back-HypeCerto/run.py
+@@ -3,13 +3,14 @@ run.py
+ Ponto de entrada para rodar o servidor diretamente.
+ Uso: python run.py
+ """
++import os
+ import uvicorn
+ from app.config import settings
+ 
+ if __name__ == "__main__":
+     uvicorn.run(
+         "app.main:app",
+-        host="0.0.0.0",
++        host=os.getenv("HOST", "127.0.0.1"),  # use HOST=0.0.0.0 só atrás de proxy/contêiner
+         port=8000,
+         reload=(settings.ENVIRONMENT == "development"),
+         log_level="info",
+diff --git a/Front-HypeCerto/client/index.html b/Front-HypeCerto/client/index.html
+index 0461ffd..be9375d 100644
+--- a/Front-HypeCerto/client/index.html
++++ b/Front-HypeCerto/client/index.html
+@@ -1,11 +1,11 @@
+ <!doctype html>
+-<html lang="en">
++<html lang="pt-BR">
+ 
+   <head>
+     <meta charset="UTF-8" />
+     <meta
+       name="viewport"
+-      content="width=device-width, initial-scale=1.0, maximum-scale=1" />
++      content="width=device-width, initial-scale=1.0" />
+     <title>HypeCerto - Social Media Automation</title>    
+     <link rel="preconnect" href="https://fonts.googleapis.com" />
+     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+@@ -15,10 +15,6 @@
+   <body>
+     <div id="root"></div>
+     <script type="module" src="/src/main.tsx"></script>
+-    <script
+-      defer
+-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
+-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+   </body>
+ 
+ </html>
+diff --git a/Front-HypeCerto/client/src/App.tsx b/Front-HypeCerto/client/src/App.tsx
+index 718cae5..bd3ec7f 100644
+--- a/Front-HypeCerto/client/src/App.tsx
++++ b/Front-HypeCerto/client/src/App.tsx
+@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
+ import Results from "./pages/Results";
+ import Create from "./pages/Create";
+ import Publish from "./pages/Publish";
++import ProtectedRoute from "./components/ProtectedRoute";
+ 
+ // Importações das novas páginas:
+ import Channels from "./pages/Channels"; 
+@@ -26,14 +27,14 @@ function Router() {
+       <Route path="/login" component={Login} />
+       <Route path="/signup" component={Signup} />
+       <Route path="/forgot-password" component={ForgotPassword} />
+-      <Route path="/dashboard" component={Dashboard} />
+-      <Route path="/results" component={Results} />
+-      <Route path="/create" component={Create} />
+-      <Route path="/publish" component={Publish} />
++      <Route path="/dashboard">{() => <ProtectedRoute component={Dashboard} />}</Route>
++      <Route path="/results">{() => <ProtectedRoute component={Results} />}</Route>
++      <Route path="/create">{() => <ProtectedRoute component={Create} />}</Route>
++      <Route path="/publish">{() => <ProtectedRoute component={Publish} />}</Route>
+       
+       {/* Rotas Adicionadas: */}
+-      <Route path="/channels" component={Channels} />
+-      <Route path="/guide" component={Guide} /> {/* <-- NOVA ROTA DO GUIA ADICIONADA AQUI */}
++      <Route path="/channels">{() => <ProtectedRoute component={Channels} />}</Route>
++      <Route path="/guide">{() => <ProtectedRoute component={Guide} />}</Route> {/* <-- NOVA ROTA DO GUIA ADICIONADA AQUI */}
+       
+       <Route path="/404" component={NotFound} />
+       {/* Final fallback route */}
+diff --git a/Front-HypeCerto/client/src/components/DashboardLayout.tsx b/Front-HypeCerto/client/src/components/DashboardLayout.tsx
+index bf66480..e4abf37 100644
+--- a/Front-HypeCerto/client/src/components/DashboardLayout.tsx
++++ b/Front-HypeCerto/client/src/components/DashboardLayout.tsx
+@@ -1,3 +1,4 @@
++import { clearSession } from "@/lib/api";
+ import { useLocation } from "wouter";
+ import { Button } from "@/components/ui/button";
+ import { Plus, LogOut, Settings, User, Link2, HelpCircle } from "lucide-react";
+@@ -28,7 +29,7 @@ export default function DashboardLayout({
+   ];
+ 
+   const handleLogout = () => {
+-    localStorage.removeItem("user");
++    clearSession();
+     setLocation("/login");
+   };
+ 
+@@ -87,12 +88,12 @@ export default function DashboardLayout({
+ 
+             {/* Menu do Usuário */}
+             <div className="relative group">
+-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 border border-transparent hover:border-gray-200">
++              <button aria-label="Menu do usuário" aria-haspopup="menu" className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 border border-transparent hover:border-gray-200">
+                 <User className="w-5.5 h-5.5 text-gray-600" />
+               </button>
+               
+               {/* Opções do Menu Suspenso */}
+-              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
++              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all duration-200">
+                 <button className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-gray-700 rounded-t-lg font-medium">
+                   Perfil
+                 </button>
+diff --git a/Front-HypeCerto/client/src/components/ProtectedRoute.tsx b/Front-HypeCerto/client/src/components/ProtectedRoute.tsx
+new file mode 100644
+index 0000000..8277eea
+--- /dev/null
++++ b/Front-HypeCerto/client/src/components/ProtectedRoute.tsx
+@@ -0,0 +1,28 @@
++import { useEffect, useState, type ComponentType } from "react";
++import { useLocation } from "wouter";
++import { API_URL, clearSession, getToken } from "@/lib/api";
++
++/**
++ * Exige sessão válida: sem token, ou com token rejeitado pelo backend (/auth/me), redireciona para /login.
++ * Nada da página protegida é renderizado antes da verificação.
++ */
++export default function ProtectedRoute({ component: Component }: { component: ComponentType }) {
++  const [, setLocation] = useLocation();
++  const [ok, setOk] = useState(false);
++
++  useEffect(() => {
++    let vivo = true;
++    const token = getToken();
++    if (!token) { setLocation("/login"); return; }
++    fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
++      .then((r) => {
++        if (!vivo) return;
++        if (r.ok) setOk(true);
++        else { clearSession(); setLocation("/login"); }
++      })
++      .catch(() => { if (vivo) { clearSession(); setLocation("/login"); } });
++    return () => { vivo = false; };
++  }, [setLocation]);
++
++  return ok ? <Component /> : null;
++}
+diff --git a/Front-HypeCerto/client/src/lib/api.ts b/Front-HypeCerto/client/src/lib/api.ts
+new file mode 100644
+index 0000000..8842970
+--- /dev/null
++++ b/Front-HypeCerto/client/src/lib/api.ts
+@@ -0,0 +1,30 @@
++/**
++ * lib/api.ts — ponto único para URL da API e sessão.
++ * Configure VITE_API_URL no .env do front (ex.: https://api.seudominio.com).
++ */
++export const API_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:8000";
++
++export const getToken = () => {
++  try { return localStorage.getItem("token"); } catch { return null; }
++};
++
++/** Remove TODOS os dados de sessão do navegador. */
++export const clearSession = () => {
++  try {
++    ["token", "user", "projectData", "manus-runtime-user-info"].forEach((k) => localStorage.removeItem(k));
++  } catch { /* storage indisponível */ }
++};
++
++/** fetch autenticado: envia o Bearer e, em 401, encerra a sessão e volta ao login. */
++export async function authFetch(path: string, init: RequestInit = {}) {
++  const token = getToken();
++  const res = await fetch(`${API_URL}${path}`, {
++    ...init,
++    headers: { ...(init.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
++  });
++  if (res.status === 401) {
++    clearSession();
++    if (window.location.pathname !== "/login") window.location.href = "/login";
++  }
++  return res;
++}
+diff --git a/Front-HypeCerto/client/src/lib/validators.ts b/Front-HypeCerto/client/src/lib/validators.ts
+index cf0b8f5..1b8da67 100644
+--- a/Front-HypeCerto/client/src/lib/validators.ts
++++ b/Front-HypeCerto/client/src/lib/validators.ts
+@@ -70,11 +70,10 @@ export const formatPhoneBrazil = (phone: string): string => {
+ };
+ 
+ /**
+- * Valida nome completo (mínimo 1 caractere, sem números)
+- * Alterado de 3 para 1 conforme solicitado.
++ * Valida nome completo (não vazio, sem números e sem símbolos de marcação < > { } [ ] \ /)
+  */
+ export const validateFullName = (name: string): boolean => {
+-  return name.trim().length >= 1 && !/[0-9]/.test(name);
++  return name.trim().length >= 1 && name.length <= 120 && !/[0-9<>{}\[\]\\/]/.test(name);
+ };
+ 
+ /**
+@@ -94,7 +93,7 @@ export const validateSignupForm = (data: {
+   if (!validateFullName(data.fullName)) {
+     errors.push({
+       field: "fullName",
+-      message: "Nome completo deve ter pelo menos 1 caracter",
++      message: "Informe seu nome (sem números).",
+     });
+   }
+ 
+diff --git a/Front-HypeCerto/client/src/main.tsx b/Front-HypeCerto/client/src/main.tsx
+index 418fe89..0a91f6f 100644
+--- a/Front-HypeCerto/client/src/main.tsx
++++ b/Front-HypeCerto/client/src/main.tsx
+@@ -148,4 +148,15 @@ createRoot(document.getElementById("root")!).render(
+       <App />
+     </QueryClientProvider>
+   </trpc.Provider>
+-);
+\ No newline at end of file
++);
++
++// Analytics (Umami) só é carregado se as variáveis estiverem definidas — evita 404 e requisições a "%VITE_...%".
++const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT as string | undefined;
++const analyticsId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined;
++if (analyticsEndpoint && analyticsId) {
++  const s = document.createElement("script");
++  s.defer = true;
++  s.src = `${analyticsEndpoint}/umami`;
++  s.setAttribute("data-website-id", analyticsId);
++  document.body.appendChild(s);
++}
+diff --git a/Front-HypeCerto/client/src/pages/Channels.tsx b/Front-HypeCerto/client/src/pages/Channels.tsx
+index 59b6c33..11a45ce 100644
+--- a/Front-HypeCerto/client/src/pages/Channels.tsx
++++ b/Front-HypeCerto/client/src/pages/Channels.tsx
+@@ -13,7 +13,7 @@ import {
+ import { CheckCircle2, Link2, Settings2, ShieldCheck, Loader2, AlertTriangle } from "lucide-react";
+ import { loginComFacebook, loadFacebookSdk } from "@/lib/facebookSdk";
+ 
+-const API_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:8000";
++import { API_URL } from "@/lib/api";
+ 
+ // Redes que usam o fluxo real de login com a Meta (Facebook/Instagram).
+ // As demais plataformas ainda não têm integração OAuth implementada.
+diff --git a/Front-HypeCerto/client/src/pages/Create.tsx b/Front-HypeCerto/client/src/pages/Create.tsx
+index 59b9fc5..bce253b 100644
+--- a/Front-HypeCerto/client/src/pages/Create.tsx
++++ b/Front-HypeCerto/client/src/pages/Create.tsx
+@@ -1,3 +1,4 @@
++import { API_URL } from "@/lib/api";
+ import { useState } from "react";
+ import { useLocation } from "wouter";
+ import DashboardLayout from "@/components/DashboardLayout";
+@@ -31,7 +32,7 @@ export default function Create() {
+       const token = localStorage.getItem("token");
+ 
+       // 1. Cria o "projeto" (mantém compatibilidade com o fluxo existente)
+-      const projetoResponse = await fetch("http://localhost:8000/projetos", {
++      const projetoResponse = await fetch(`${API_URL}/projetos`, {
+         method: "POST",
+         headers: {
+           "Content-Type": "application/json",
+@@ -52,7 +53,7 @@ export default function Create() {
+       const projetoSalvo = await projetoResponse.json();
+ 
+       // 2. Cria a "postagem" de fato — é ela que será agendada/publicada na próxima tela
+-      const postagemResponse = await fetch("http://localhost:8000/posts", {
++      const postagemResponse = await fetch(`${API_URL}/posts`, {
+         method: "POST",
+         headers: {
+           "Content-Type": "application/json",
+diff --git a/Front-HypeCerto/client/src/pages/Login.tsx b/Front-HypeCerto/client/src/pages/Login.tsx
+index 50ae65b..13acdb0 100644
+--- a/Front-HypeCerto/client/src/pages/Login.tsx
++++ b/Front-HypeCerto/client/src/pages/Login.tsx
+@@ -1,3 +1,4 @@
++import { API_URL } from "@/lib/api";
+ import { useLocation, Link } from "wouter";
+ import { useState } from "react";
+ 
+@@ -14,7 +15,7 @@ export default function Login() {
+     setLoading(true);
+ 
+     try {
+-      const response = await fetch("http://localhost:8000/auth/login", {
++      const response = await fetch(`${API_URL}/auth/login`, {
+         method: "POST",
+         headers: {
+           "Content-Type": "application/json",
+@@ -249,10 +250,10 @@ const styles = `
+   }
+   .field input:disabled {
+     background: #f9f9f9;
+-    color: #a79fbb;
++    color: #6b6480;
+     cursor: not-allowed;
+   }
+-  .field input::placeholder { color: #a79fbb; }
++  .field input::placeholder { color: #6b6480; }
+   .field input:focus:not(:disabled) {
+     border-color: var(--violet);
+     box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
+@@ -289,7 +290,7 @@ const styles = `
+   .note { 
+     margin-top: 16px; 
+     font-size: 12.5px; 
+-    color: #a79fbb; 
++    color: #6b6480; 
+     text-align: center; 
+   }
+ 
+@@ -303,7 +304,7 @@ const styles = `
+     color: var(--muted);
+     text-align: center;
+   }
+-  .links a { color: var(--violet-soft); text-decoration: none; cursor: pointer; }
++  .links a { color: #6d28d9; text-decoration: underline; cursor: pointer; }
+   .links a:hover { text-decoration: underline; }
+ 
+   .visual {
+diff --git a/Front-HypeCerto/client/src/pages/Publish.tsx b/Front-HypeCerto/client/src/pages/Publish.tsx
+index 2d13851..730465e 100644
+--- a/Front-HypeCerto/client/src/pages/Publish.tsx
++++ b/Front-HypeCerto/client/src/pages/Publish.tsx
+@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
+ import { Textarea } from "@/components/ui/textarea";
+ import { Check, UploadCloud, Pencil, Save, X, Loader2, AlertTriangle, Link2 } from "lucide-react";
+ 
+-const API_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:8000";
++import { API_URL } from "@/lib/api";
+ 
+ interface ContaSocial {
+   id: number;
+diff --git a/Front-HypeCerto/client/src/pages/Signup.tsx b/Front-HypeCerto/client/src/pages/Signup.tsx
+index 65c45d4..614e81c 100644
+--- a/Front-HypeCerto/client/src/pages/Signup.tsx
++++ b/Front-HypeCerto/client/src/pages/Signup.tsx
+@@ -1,3 +1,4 @@
++import { API_URL } from "@/lib/api";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+ import { useState } from "react";
+@@ -107,7 +108,7 @@ export default function Signup() {
+     }
+ 
+     try {
+-      const response = await fetch("http://localhost:8000/auth/signup", {
++      const response = await fetch(`${API_URL}/auth/signup`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+@@ -136,6 +137,7 @@ export default function Signup() {
+         return;
+       }
+ 
++      if (data.access_token) localStorage.setItem("token", data.access_token);
+       setStep("plan");
+     } catch (error) {
+       console.error("❌ Erro de conexão:", error);
+@@ -238,7 +240,7 @@ export default function Signup() {
+                 className="bg-white border-purple-200 text-gray-950 pr-10"
+                 required
+               />
+-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
++              <button type="button" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+               </button>
+             </div>
+@@ -257,7 +259,7 @@ export default function Signup() {
+                 className="bg-white border-purple-200 text-gray-950 pr-10"
+                 required
+                 />
+-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
++                <button type="button" aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"} onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                 </button>
+             </div>

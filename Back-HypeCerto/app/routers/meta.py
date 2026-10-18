@@ -10,6 +10,9 @@ from app.services.dependencies import get_current_user
 from app.models.models import Usuario, Agendamento, Postagem
 from app.integrations.meta_api import executar_publicacao
 from app.config import settings
+import httpx
+from pydantic import BaseModel, Field
+from app.routers.channels import upsert_conta
 
 router = APIRouter(prefix="/meta", tags=["Meta API"])
 
@@ -54,8 +57,60 @@ async def publicar_agora(
     )
 
 
+class OAuthFacebookRequest(BaseModel):
+    access_token: str = Field(min_length=1, max_length=4096)
+
+
+@router.post("/oauth/facebook", summary="Conectar Facebook/Instagram a partir do token do Facebook Login")
+async def oauth_facebook(
+    body: OAuthFacebookRequest,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Rota chamada por Channels.tsx após o Facebook Login. Lista as páginas do usuário
+    (e o Instagram Business vinculado) e salva as contas com token criptografado.
+    Em modo mock não chama a Meta e cria contas simuladas.
+    """
+    contas, avisos = [], []
+    if settings.USE_MOCK_META_API:
+        upsert_conta(db, current_user, "facebook", body.access_token, page_id="mock_page", nome_conta="Página (mock)")
+        upsert_conta(db, current_user, "instagram", body.access_token, ig_user_id="mock_ig", nome_conta="Instagram (mock)")
+        contas = [{"plataforma": "facebook"}, {"plataforma": "instagram"}]
+        avisos.append("Modo simulação ativo: contas fictícias foram conectadas.")
+    else:
+        url = f"https://graph.facebook.com/{settings.META_API_VERSION}/me/accounts"
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                r = await client.get(url, params={
+                    "fields": "id,name,access_token,instagram_business_account",
+                    "access_token": body.access_token,
+                })
+                r.raise_for_status()
+                paginas = r.json().get("data", [])
+        except httpx.HTTPError:
+            raise HTTPException(status_code=502, detail="Não foi possível consultar a Meta. Tente novamente.")
+        if not paginas:
+            raise HTTPException(status_code=400, detail="Nenhuma página do Facebook encontrada para esta conta.")
+        pagina = paginas[0]
+        upsert_conta(db, current_user, "facebook", pagina.get("access_token") or body.access_token,
+                     page_id=pagina["id"], nome_conta=pagina.get("name"))
+        contas.append({"plataforma": "facebook"})
+        ig = (pagina.get("instagram_business_account") or {}).get("id")
+        if ig:
+            upsert_conta(db, current_user, "instagram", pagina.get("access_token") or body.access_token,
+                         ig_user_id=ig, nome_conta=pagina.get("name"))
+            contas.append({"plataforma": "instagram"})
+        else:
+            avisos.append("Nenhuma conta Instagram Business vinculada à página.")
+        if len(paginas) > 1:
+            avisos.append("Mais de uma página encontrada; a primeira foi conectada.")
+    db.commit()
+    return {"contas": contas, "avisos": avisos}
+
+
 @router.get("/status", summary="Status da integração Meta")
-def status_integracao():
+def status_integracao(current_user: Usuario = Depends(get_current_user)):
     """Retorna configuração atual da integração Meta."""
     return {
         "modo": "mock" if settings.USE_MOCK_META_API else "real",
