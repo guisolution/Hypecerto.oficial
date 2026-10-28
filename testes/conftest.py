@@ -1,6 +1,6 @@
-"""Harness de testes (externo ao repositório). Usa SQLite isolado; nenhum arquivo do repo é alterado."""
+"""Harness de testes. Usa SQLite isolado; nenhum arquivo do repo é alterado."""
 import os, sys, tempfile, pathlib
-REPO = os.environ.get("HC_REPO", "/home/claude/guisolution/hypecerto.oficial/Back-HypeCerto")
+REPO = os.environ.get("HC_REPO", str(pathlib.Path(__file__).resolve().parent.parent / "Back-HypeCerto"))
 sys.path.insert(0, REPO)
 _db = pathlib.Path(tempfile.mkdtemp()) / "t.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_db}"
