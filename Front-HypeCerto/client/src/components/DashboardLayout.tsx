@@ -1,3 +1,4 @@
+import { clearSession } from "@/lib/api";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Plus, LogOut, Settings, User, Link2, HelpCircle } from "lucide-react";
@@ -28,7 +29,7 @@ export default function DashboardLayout({
   ];
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    clearSession();
     setLocation("/login");
   };
 
@@ -87,12 +88,12 @@ export default function DashboardLayout({
 
             {/* Menu do Usuário */}
             <div className="relative group">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 border border-transparent hover:border-gray-200">
+              <button aria-label="Menu do usuário" aria-haspopup="menu" className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 border border-transparent hover:border-gray-200">
                 <User className="w-5.5 h-5.5 text-gray-600" />
               </button>
               
               {/* Opções do Menu Suspenso */}
-              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all duration-200">
                 <button className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm text-gray-700 rounded-t-lg font-medium">
                   Perfil
                 </button>

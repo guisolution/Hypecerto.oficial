@@ -59,7 +59,6 @@ class ContaSocial(Base):
 
     id_conta = Column(Integer, primary_key=True, index=True)
     id = synonym("id_conta")
-    
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     plataforma_id = Column(Integer, ForeignKey("plataformas.id_plataforma"))
     nome_conta = Column(String(255))
@@ -82,7 +81,6 @@ class Plataforma(Base):
 
     id_plataforma = Column(Integer, primary_key=True, index=True)
     id = synonym("id_plataforma")
-    
     nome = Column(String(100), nullable=False)   # Facebook, Instagram, TikTok...
     slug = Column(String(50), unique=True)
     icone_url = Column(Text)
@@ -96,7 +94,6 @@ class Projeto(Base):
 
     id_projeto = Column(Integer, primary_key=True, index=True)
     id = synonym("id_projeto")
-    
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     
     nome_do_projeto = Column(String(255), nullable=False)
@@ -112,13 +109,16 @@ class Projeto(Base):
     usuario = relationship("Usuario", back_populates="projetos")
     postagens = relationship("Postagem", back_populates="projeto")
 
+    @property
+    def status(self):
+        return "ativo" if self.ativo else "arquivado"
+
 
 class Postagem(Base):
     __tablename__ = "postagens"
 
     id_postagem = Column(Integer, primary_key=True, index=True)
     id = synonym("id_postagem")
-    
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     projeto_id = Column(Integer, ForeignKey("projetos.id_projeto"))
     titulo = Column(String(500))
@@ -141,7 +141,6 @@ class Agendamento(Base):
 
     id_agendamento = Column(Integer, primary_key=True, index=True)
     id = synonym("id_agendamento")
-    
     postagem_id = Column(Integer, ForeignKey("postagens.id_postagem"), nullable=False)
     conta_social_id = Column(Integer, ForeignKey("contas_sociais.id_conta"), nullable=False)
     data_agendada = Column(DateTime(timezone=True), nullable=False)

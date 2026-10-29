@@ -71,8 +71,8 @@ async def criar_ideias(
 @router.get("/historico", response_model=List[IAResponse], summary="Histórico de sugestões IA")
 def historico_ia(
     tipo: Optional[str] = Query(None, description="legenda, ideia"),
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

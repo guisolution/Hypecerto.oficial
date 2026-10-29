@@ -10,6 +10,9 @@ from app.database.connection import get_db
 from app.schemas.schemas import ContaSocialResponse, ConectarContaRequest, MessageResponse
 from app.services.dependencies import get_current_user
 from app.models.models import Usuario, ContaSocial, Plataforma
+from app.services.crypto import encrypt_token
+
+NOMES_PLATAFORMAS = {"facebook": "Facebook", "instagram": "Instagram", "tiktok": "TikTok", "youtube": "YouTube", "whatsapp": "WhatsApp", "linkedin": "LinkedIn"}
 
 router = APIRouter(prefix="/channels", tags=["Canais / Contas Sociais"])
 
@@ -58,52 +61,49 @@ def conectar_conta(
     No fluxo real: o frontend faz OAuth com a Meta e envia o
     access_token resultante para este endpoint.
     """
-    # Busca plataforma pelo slug
-    plataforma = db.query(Plataforma).filter(
-        Plataforma.slug == body.plataforma_slug,
-        Plataforma.ativa == True,
-    ).first()
-
-    if not plataforma:
-        # Cria a plataforma se não existir (para facilitar setup inicial)
-        plataforma = Plataforma(
-            nome=body.plataforma_slug.capitalize(),
-            slug=body.plataforma_slug,
-            ativa=True,
-        )
-        db.add(plataforma)
-        db.flush()
-
-    # Verifica se já existe conta ativa para esta plataforma
-    existente = db.query(ContaSocial).filter(
-        ContaSocial.usuario_id == current_user.id,
-        ContaSocial.plataforma_id == plataforma.id,
-        ContaSocial.ativa == True,
-    ).first()
-
-    if existente:
-        # Atualiza tokens existentes
-        existente.access_token = body.access_token
-        existente.page_id = body.page_id or existente.page_id
-        existente.ig_user_id = body.ig_user_id or existente.ig_user_id
-        existente.nome_conta = body.nome_conta or existente.nome_conta
-        db.commit()
-        db.refresh(existente)
-        return _to_response(existente)
-
-    conta = ContaSocial(
-        usuario_id=current_user.id,
-        plataforma_id=plataforma.id,
-        access_token=body.access_token,
-        page_id=body.page_id,
-        ig_user_id=body.ig_user_id,
-        nome_conta=body.nome_conta or body.plataforma_slug,
-        ativa=True,
+    conta = upsert_conta(
+        db, current_user, body.plataforma_slug, body.access_token,
+        page_id=body.page_id, ig_user_id=body.ig_user_id, nome_conta=body.nome_conta,
     )
-    db.add(conta)
     db.commit()
     db.refresh(conta)
     return _to_response(conta)
+
+
+def upsert_conta(db: Session, user: Usuario, slug: str, access_token: str,
+                 page_id=None, ig_user_id=None, nome_conta=None) -> ContaSocial:
+    """Cria ou atualiza a conta social do usuário. O slug já foi validado pelo schema (lista fixa).
+    O token é gravado CRIPTOGRAFADO."""
+    plataforma = db.query(Plataforma).filter(Plataforma.slug == slug, Plataforma.ativa == True).first()  # noqa: E712
+    if not plataforma:
+        plataforma = Plataforma(nome=NOMES_PLATAFORMAS[slug], slug=slug, ativa=True)
+        db.add(plataforma)
+        db.flush()
+
+    existente = db.query(ContaSocial).filter(
+        ContaSocial.usuario_id == user.id,
+        ContaSocial.plataforma_id == plataforma.id,
+        ContaSocial.ativa == True,  # noqa: E712
+    ).first()
+    if existente:
+        existente.access_token = encrypt_token(access_token)
+        existente.page_id = page_id or existente.page_id
+        existente.ig_user_id = ig_user_id or existente.ig_user_id
+        existente.nome_conta = nome_conta or existente.nome_conta
+        return existente
+
+    conta = ContaSocial(
+        usuario_id=user.id,
+        plataforma_id=plataforma.id,
+        access_token=encrypt_token(access_token),
+        page_id=page_id,
+        ig_user_id=ig_user_id,
+        nome_conta=nome_conta or slug,
+        ativa=True,
+    )
+    db.add(conta)
+    db.flush()
+    return conta
 
 
 @router.delete("/{conta_id}", response_model=MessageResponse, summary="Desconectar conta social")

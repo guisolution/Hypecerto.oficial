@@ -2,7 +2,7 @@
 routers/auth.py
 Endpoints de autenticação: login, cadastro, perfil, logout.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.auth_service import pwd_context
@@ -16,25 +16,29 @@ from app.services.auth_service import (
     create_usuario, get_usuario_by_email
 )
 from app.services.dependencies import get_current_user
+from app.services.rate_limit import check_rate_limit, register_failure, clear_failures
 from app.models.models import Usuario
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
 
 @router.post("/login", response_model=TokenResponse, summary="Fazer login")
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """
     Autentica o usuário com email e senha.
     Retorna JWT + dados do usuário.
     
     Frontend usa: POST /auth/login  →  salva token no localStorage
     """
+    check_rate_limit(request, "login", body.email)
     user = authenticate_usuario(db, body.email, body.password)
     if not user:
+        register_failure(request, "login", body.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos",
         )
+    clear_failures(request, "login", body.email)
 
     token = create_access_token({"sub": str(user.id)})
     return {
@@ -46,7 +50,6 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/signup", response_model=TokenResponse, status_code=201, summary="Criar conta")
 def signup(body: SignupRequest, db: Session = Depends(get_db)):
-    print(f"DEBUG: Nome recebido no servidor: {body.nome}")
     """
     Cadastra novo usuário.
     Retorna JWT + dados do usuário criado.
@@ -97,47 +100,48 @@ def forgot_password(email: str, db: Session = Depends(get_db)):
         "success": True,
     }
 
-@router.delete("/delete")
-def delete_account_bruto(body: LoginRequest, db: Session = Depends(get_db)):
-    # 1. Busca o usuário usando SQL Puro para não ativar os Mappers quebrados
-    result = db.execute(
-        text("SELECT id, senha_hash FROM usuarios WHERE email = :email"),
-        {"email": body.email}
-    ).first()
+@router.delete("/delete", summary="Excluir conta")
+def delete_account(body: LoginRequest, request: Request, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    """
+    Exclui a conta do usuário autenticado após validação de senha e identidade.
+    """
+    # Protege contra força bruta na exclusão
+    check_rate_limit(request, "delete_account", current_user.email)
 
-    if not result:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if current_user.email != body.email:
+        register_failure(request, "delete_account", current_user.email)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Você não tem permissão para excluir esta conta."
+        )
 
-    user_id, senha_hash = result
+    if not pwd_context.verify(body.password, current_user.senha_hash):
+        register_failure(request, "delete_account", current_user.email)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Senha incorreta"
+        )
 
-    # 2. Verifica a senha manualmente
-    if not pwd_context.verify(body.password, senha_hash):
-        raise HTTPException(status_code=401, detail="Senha incorreta")
+    clear_failures(request, "delete_account", current_user.email)
 
-    # 3. Deleta o infeliz
     try:
-        db.execute(text("DELETE FROM usuarios WHERE id = :id"), {"id": user_id})
+        db.delete(current_user)
         db.commit()
-        return {"message": "Usuário deletado com sucesso no modo bruto!"}
+        return {"message": "Usuário deletado com sucesso!", "success": True}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro no banco: {str(e)}")
 
 
 # ==========================================
-# NOVA ROTA PARA O OAUTH DA META (FACEBOOK)
+# CALLBACK DO OAUTH DA META (FACEBOOK)
 # ==========================================
 @router.get("/callback/facebook", summary="Receber código de autorização da Meta")
 def facebook_oauth_callback(code: str):
     """
     Endpoint acessado pela Meta após o usuário autorizar o aplicativo.
-    Recebe o 'code' na URL, que deverá ser trocado pelo Access Token posteriormente.
+    O 'code' recebido não é devolvido na resposta nem registrado em log
+    (evita refletir/vazar o código de autorização). A troca do 'code' pelo
+    Access Token é feita no fluxo /meta/oauth/facebook.
     """
-    
-    # Aqui você implementará a requisição para trocar o 'code' pelo Token da Meta
-    # usando a biblioteca requests ou httpx do Python.
-    
-    return {
-        "message": "Autenticação com a Meta realizada. Código recebido.",
-        "code": code
-    }
+    return {"message": "Autenticação com a Meta recebida."}

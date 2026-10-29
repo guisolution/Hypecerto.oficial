@@ -70,11 +70,10 @@ export const formatPhoneBrazil = (phone: string): string => {
 };
 
 /**
- * Valida nome completo (mínimo 1 caractere, sem números)
- * Alterado de 3 para 1 conforme solicitado.
+ * Valida nome completo (não vazio, sem números e sem símbolos de marcação < > { } [ ] \ /)
  */
 export const validateFullName = (name: string): boolean => {
-  return name.trim().length >= 1 && !/[0-9]/.test(name);
+  return name.trim().length >= 1 && name.length <= 120 && !/[0-9<>{}\[\]\\/]/.test(name);
 };
 
 /**
@@ -94,7 +93,7 @@ export const validateSignupForm = (data: {
   if (!validateFullName(data.fullName)) {
     errors.push({
       field: "fullName",
-      message: "Nome completo deve ter pelo menos 1 caracter",
+      message: "Informe seu nome (sem números).",
     });
   }
 

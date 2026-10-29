@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Check, UploadCloud, Pencil, Save, X, Loader2, AlertTriangle, Link2 } from "lucide-react";
 
-const API_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:8000";
+import { API_URL } from "@/lib/api";
 
 interface ContaSocial {
   id: number;

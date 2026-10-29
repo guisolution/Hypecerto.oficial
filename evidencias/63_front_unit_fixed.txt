@@ -1,0 +1,15 @@
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F01 e-mail válido
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F02 e-mail inválido (sem @, sem domínio, com espaço)
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F03 senha forte aceita
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F04 senha fraca rejeitada (curta, sem maiúscula, sem número)
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F05 confirmação de senha
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F06 telefone BR válido com e sem máscara
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F07 telefone BR inválido (fixo, curto, DDD 0x)
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F08 formatação de telefone
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F09 nome sem números
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F10 nome de 1 letra é aceito, mas símbolos de marcação são recusados
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F11 mensagem de nome inválido é clara: 'Informe seu nome (sem números).'
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F12 formulário completo válido => 0 erros
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F13 formulário inválido acumula erros por campo
+ ✓ validators.test.ts > TESTES UNITÁRIOS FRONT — validators.ts > F14 ReDoS: regex de e-mail em entrada longa < 200ms
+      Tests  14 passed (14)

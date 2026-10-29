@@ -1,0 +1,182 @@
+[
+ {
+  "id": "E01",
+  "desc": "Landing carrega",
+  "ok": true,
+  "detail": "title='HypeCerto - Social Media Automation'"
+ },
+ {
+  "id": "E02-dashboard",
+  "desc": "Rota protegida /dashboard sem token redireciona p/ login",
+  "ok": true,
+  "detail": "url final=http://127.0.0.1:5173/login"
+ },
+ {
+  "id": "E02-create",
+  "desc": "Rota protegida /create sem token redireciona p/ login",
+  "ok": true,
+  "detail": "url final=http://127.0.0.1:5173/login"
+ },
+ {
+  "id": "E02-publish",
+  "desc": "Rota protegida /publish sem token redireciona p/ login",
+  "ok": true,
+  "detail": "url final=http://127.0.0.1:5173/login"
+ },
+ {
+  "id": "E02-channels",
+  "desc": "Rota protegida /channels sem token redireciona p/ login",
+  "ok": true,
+  "detail": "url final=http://127.0.0.1:5173/login"
+ },
+ {
+  "id": "E02-results",
+  "desc": "Rota protegida /results sem token redireciona p/ login",
+  "ok": true,
+  "detail": "url final=http://127.0.0.1:5173/login"
+ },
+ {
+  "id": "E03",
+  "desc": "Signup tem campos",
+  "ok": true,
+  "detail": "6 inputs: nome, email, password, confirmPassword, telefone, acceptTerms"
+ },
+ {
+  "id": "E04",
+  "desc": "Cadastro via UI avança para escolha de plano",
+  "ok": true,
+  "detail": "Teste Grátis |  | Grátis |  | Selecionar | Plano Pro |  | R$ 99 |  | Selecionar | Enterprise |  | Customizado |  | Selecionar"
+ },
+ {
+  "id": "E05",
+  "desc": "Usuário criado no backend (login por API)",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "id": "E06",
+  "desc": "Login via UI leva ao dashboard",
+  "ok": true,
+  "detail": "url=http://127.0.0.1:5173/dashboard"
+ },
+ {
+  "id": "E07",
+  "desc": "JWT NÃO é armazenado em localStorage (mitigação de XSS)",
+  "ok": false,
+  "detail": "token[:20]=eyJhbGciOiJIUzI1NiIs…"
+ },
+ {
+  "id": "E09a",
+  "desc": "Menu do usuário (Sair) acessível por TECLADO (focus)",
+  "ok": true,
+  "detail": "visível após focus=True (menu usa apenas :hover)"
+ },
+ {
+  "id": "E09",
+  "desc": "Logout remove o token de sessão do navegador",
+  "ok": true,
+  "detail": "token após logout=removido; url=http://127.0.0.1:5173/login"
+ },
+ {
+  "id": "E09b",
+  "desc": "Token residual pós-logout é rejeitado pela API",
+  "ok": true,
+  "detail": "/auth/me => None"
+ },
+ {
+  "id": "E10",
+  "desc": "Mensagem de erro em credencial inválida",
+  "ok": true,
+  "detail": "HypeCerto | ACESSO À CONTA | Bem-Vindo | Muito bom ter você aqui. |  | Use seu e-mail e senha para acessar sua conta. |  | Email ou se"
+ },
+ {
+  "id": "A11Y-login",
+  "desc": "axe-core sem violações critical/serious (/login)",
+  "ok": true,
+  "detail": "2 violações (0 crit/serious): landmark-one-main[moderate]x1; region[moderate]x10"
+ },
+ {
+  "id": "LANG-login",
+  "desc": "atributo lang do <html> coerente com conteúdo pt-BR",
+  "ok": true,
+  "detail": "lang='pt-BR'"
+ },
+ {
+  "id": "A11Y-signup",
+  "desc": "axe-core sem violações critical/serious (/signup)",
+  "ok": true,
+  "detail": "2 violações (0 crit/serious): landmark-one-main[moderate]x1; region[moderate]x10"
+ },
+ {
+  "id": "LANG-signup",
+  "desc": "atributo lang do <html> coerente com conteúdo pt-BR",
+  "ok": true,
+  "detail": "lang='pt-BR'"
+ },
+ {
+  "id": "A11Y-landing",
+  "desc": "axe-core sem violações critical/serious (/)",
+  "ok": true,
+  "detail": "1 violações (0 crit/serious): region[moderate]x1"
+ },
+ {
+  "id": "LANG-landing",
+  "desc": "atributo lang do <html> coerente com conteúdo pt-BR",
+  "ok": true,
+  "detail": "lang='pt-BR'"
+ },
+ {
+  "id": "RESP-375-login",
+  "desc": "Sem rolagem horizontal em 375px (/login)",
+  "ok": true,
+  "detail": "scrollWidth=375"
+ },
+ {
+  "id": "RESP-375-signup",
+  "desc": "Sem rolagem horizontal em 375px (/signup)",
+  "ok": true,
+  "detail": "scrollWidth=375"
+ },
+ {
+  "id": "RESP-375-",
+  "desc": "Sem rolagem horizontal em 375px (/)",
+  "ok": true,
+  "detail": "scrollWidth=375"
+ },
+ {
+  "id": "RESP-768-login",
+  "desc": "Sem rolagem horizontal em 768px (/login)",
+  "ok": true,
+  "detail": "scrollWidth=768"
+ },
+ {
+  "id": "RESP-768-signup",
+  "desc": "Sem rolagem horizontal em 768px (/signup)",
+  "ok": true,
+  "detail": "scrollWidth=768"
+ },
+ {
+  "id": "RESP-768-",
+  "desc": "Sem rolagem horizontal em 768px (/)",
+  "ok": true,
+  "detail": "scrollWidth=768"
+ },
+ {
+  "id": "CONSOLE-JS",
+  "desc": "Sem exceções JS não tratadas",
+  "ok": true,
+  "detail": "0: "
+ },
+ {
+  "id": "NET-LOCAL",
+  "desc": "Sem respostas 4xx/5xx em recursos locais (exceto login inválido esperado)",
+  "ok": true,
+  "detail": "401 http://localhost:8000/auth/login"
+ },
+ {
+  "id": "NET-EXT",
+  "desc": "Recursos externos carregados (bloqueios de rede do sandbox ignorados)",
+  "ok": true,
+  "detail": "16 falhas externas: FAILED https://fonts.googleapis.com/css2"
+ }
+]

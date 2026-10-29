@@ -3,9 +3,10 @@ schemas/schemas.py
 Schemas Pydantic para validação de request/response da API REST.
 Estrutura compatível com o que o frontend React consome via Axios/Fetch.
 """
-from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional, List, Any, Dict
-from datetime import datetime
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from typing import Optional, List, Any, Dict, Literal
+from datetime import datetime, timezone
+import re
 
 
 # ═══════════════════════════════════════════════
@@ -14,16 +15,33 @@ from datetime import datetime
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class SignupRequest(BaseModel):
-    nome: str
+    nome: str = Field(min_length=1, max_length=120)
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=72)   # 72 = limite do bcrypt (sem truncamento silencioso)
     confirmPassword: str
-    telefone: Optional[str] = None
-    plan: Optional[str] = "free"
+    telefone: Optional[str] = Field(default=None, max_length=30)
+    plan: Optional[Literal["free", "pro", "enterprise"]] = "free"
+
+    @field_validator("nome")
+    @classmethod
+    def nome_valido(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Nome não pode ser vazio")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def senha_forte(cls, v):
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Senha excede 72 bytes")
+        if not (re.search(r"[A-Z]", v) and re.search(r"[a-z]", v) and re.search(r"[0-9]", v)):
+            raise ValueError("A senha deve conter maiúscula, minúscula e número")
+        return v
 
     @field_validator("confirmPassword")
     @classmethod
@@ -71,12 +89,15 @@ class ContaSocialResponse(BaseModel):
         from_attributes = True
 
 
+PLATAFORMAS_PERMITIDAS = ("facebook", "instagram", "tiktok", "youtube", "whatsapp", "linkedin")
+
+
 class ConectarContaRequest(BaseModel):
-    plataforma_slug: str           # facebook, instagram, tiktok...
-    access_token: str
-    page_id: Optional[str] = None
-    ig_user_id: Optional[str] = None
-    nome_conta: Optional[str] = None
+    plataforma_slug: Literal["facebook", "instagram", "tiktok", "youtube", "whatsapp", "linkedin"]
+    access_token: str = Field(min_length=1, max_length=4096)
+    page_id: Optional[str] = Field(default=None, max_length=255)
+    ig_user_id: Optional[str] = Field(default=None, max_length=255)
+    nome_conta: Optional[str] = Field(default=None, max_length=255)
     permissions: Optional[Dict[str, bool]] = None
 
 
@@ -85,17 +106,22 @@ class ConectarContaRequest(BaseModel):
 # ═══════════════════════════════════════════════
 
 class ProjetoCreate(BaseModel):
-    nome_do_projeto: str  # Nome exato da coluna no banco
-    area_do_projeto: Optional[str] = None
-    responsavel: Optional[str] = None
-    descricao: Optional[str] = None
+    nome_do_projeto: str = Field(min_length=1, max_length=255)
+    area_do_projeto: Optional[str] = Field(default=None, max_length=255)
+    responsavel: Optional[str] = Field(default=None, max_length=255)
+    descricao: Optional[str] = Field(default=None, max_length=5000)
 
 
 class ProjetoResponse(BaseModel):
     id_projeto: int
     usuario_id: int
-    data_criacao: datetime
+    nome_do_projeto: Optional[str] = None
+    area_do_projeto: Optional[str] = None
+    responsavel: Optional[str] = None
+    descricao: Optional[str] = None
+    data_criacao: Optional[datetime] = None
     status: Optional[str] = "ativo"
+    nome_usuario: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -106,16 +132,17 @@ class ProjetoResponse(BaseModel):
 # ═══════════════════════════════════════════════
 
 class PostagemCreate(BaseModel):
-    titulo: Optional[str] = None
-    conteudo: str
+    titulo: Optional[str] = Field(default=None, max_length=500)
+    conteudo: str = Field(min_length=1, max_length=20000)
     projeto_id: Optional[int] = None
     tags: Optional[List[int]] = []
 
 
 class PostagemUpdate(BaseModel):
-    titulo: Optional[str] = None
-    conteudo: Optional[str] = None
-    status: Optional[str] = None
+    titulo: Optional[str] = Field(default=None, max_length=500)
+    conteudo: Optional[str] = Field(default=None, min_length=1, max_length=20000)
+    # 'publicado' e 'erro' só são definidos pelo sistema ao publicar, nunca pelo cliente
+    status: Optional[Literal["rascunho", "agendado"]] = None
     projeto_id: Optional[int] = None
 
 
@@ -160,15 +187,34 @@ class PostagemResponse(BaseModel):
 #  AGENDAMENTOS
 # ═══════════════════════════════════════════════
 
+def _futuro(v: datetime) -> datetime:
+    if v.tzinfo is None:
+        v = v.replace(tzinfo=timezone.utc)
+    if v < datetime.now(timezone.utc):
+        raise ValueError("data_agendada deve estar no futuro")
+    return v
+
+
 class AgendamentoCreate(BaseModel):
     postagem_id: int
     conta_social_id: int
     data_agendada: datetime
 
+    @field_validator("data_agendada")
+    @classmethod
+    def _data_futura(cls, v):
+        return _futuro(v)
+
 
 class AgendamentoUpdate(BaseModel):
     data_agendada: Optional[datetime] = None
-    status_envio: Optional[str] = None
+    # o cliente só pode cancelar ou reagendar; 'publicado'/'erro' são definidos pelo sistema
+    status_envio: Optional[Literal["agendado", "cancelado"]] = None
+
+    @field_validator("data_agendada")
+    @classmethod
+    def _data_futura(cls, v):
+        return _futuro(v) if v is not None else v
 
 
 class AgendamentoResponse(BaseModel):
@@ -213,16 +259,23 @@ class PublicarResponse(BaseModel):
 # ═══════════════════════════════════════════════
 
 class IALegendaRequest(BaseModel):
-    tema: str
-    plataforma: Optional[str] = "instagram"
-    tom: Optional[str] = "engajador"     # engajador, profissional, divertido, informativo
-    incluir_hashtags: Optional[bool] = True
+    tema: str = Field(min_length=1, max_length=300)
+    plataforma: Literal["instagram", "facebook", "linkedin", "tiktok", "youtube", "whatsapp"] = "instagram"
+    tom: Literal["engajador", "profissional", "divertido", "informativo"] = "engajador"
+    incluir_hashtags: bool = True
+
+    @field_validator("plataforma", "tom", "incluir_hashtags", mode="before")
+    @classmethod
+    def _null_vira_padrao(cls, v, info):
+        if v is None:
+            return {"plataforma": "instagram", "tom": "engajador", "incluir_hashtags": True}[info.field_name]
+        return v
 
 
 class IAIdeiasRequest(BaseModel):
-    segmento: str
-    quantidade: Optional[int] = 5
-    plataforma: Optional[str] = None
+    segmento: str = Field(min_length=1, max_length=300)
+    quantidade: int = Field(default=5, ge=1, le=10)
+    plataforma: Optional[Literal["instagram", "facebook", "linkedin", "tiktok", "youtube", "whatsapp"]] = None
 
 
 class IAResponse(BaseModel):

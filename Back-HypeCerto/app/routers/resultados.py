@@ -6,7 +6,7 @@ Compatível com Results.tsx e Dashboard.tsx do frontend.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime, timedelta, timezone
 from app.database.connection import get_db
 from app.schemas.schemas import (
@@ -82,11 +82,6 @@ def dashboard_metricas(
             )
             .scalar() or 0
         )
-        # Usa valor mock > 0 se não houver dados ainda (melhora visualização no demo)
-        if count == 0 and total_postagens == 0:
-            import random
-            count = random.randint(30, 70)
-
         atividade_semanal.append({
             "name": dias_semana[dia.weekday()],
             "value": count,
@@ -132,8 +127,8 @@ def dashboard_metricas(
 @router.get("/metricas", response_model=List[MetricaResponse], summary="Listar métricas")
 def listar_metricas(
     postagem_id: Optional[int] = None,
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -173,7 +168,7 @@ def listar_relatorios(
 
 @router.post("/relatorios/gerar", response_model=RelatorioResponse, summary="Gerar relatório")
 def gerar_relatorio(
-    tipo: str = Query("mensal", description="semanal, mensal, campanha"),
+    tipo: Literal["semanal", "mensal", "campanha"] = Query("mensal", description="semanal, mensal, campanha"),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

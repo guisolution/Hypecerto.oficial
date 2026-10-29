@@ -2,7 +2,7 @@
 routers/posts.py
 CRUD completo de postagens + upload de mídia.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.database.connection import get_db
@@ -12,13 +12,51 @@ from app.schemas.schemas import (
 from app.services.dependencies import get_current_user
 from app.models.models import Usuario, Postagem, Agendamento, Midia, Projeto
 import aiofiles
+import io
 import uuid
 import os
+from PIL import Image, UnidentifiedImageError
+from app.config import settings
 
 router = APIRouter(prefix="/posts", tags=["Postagens"])
 
 UPLOAD_DIR = "uploads/"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Lista de permissão: extensão -> (mime canônico, tipo). Nada fora disso é aceito (html, svg, php, exe...).
+TIPOS_PERMITIDOS = {
+    ".png": ("image/png", "imagem", "PNG"),
+    ".jpg": ("image/jpeg", "imagem", "JPEG"),
+    ".jpeg": ("image/jpeg", "imagem", "JPEG"),
+    ".gif": ("image/gif", "imagem", "GIF"),
+    ".webp": ("image/webp", "imagem", "WEBP"),
+    ".mp4": ("video/mp4", "video", None),
+    ".mov": ("video/quicktime", "video", None),
+}
+
+
+def _validar_conteudo(ext: str, content: bytes) -> None:
+    """Valida o CONTEÚDO real (magic bytes), não o Content-Type enviado pelo cliente."""
+    _, tipo, fmt = TIPOS_PERMITIDOS[ext]
+    if tipo == "imagem":
+        try:
+            with Image.open(io.BytesIO(content)) as img:
+                img.verify()
+                if img.format != fmt:
+                    raise ValueError("formato diferente da extensão")
+        except (UnidentifiedImageError, ValueError, OSError, SyntaxError):
+            raise HTTPException(status_code=415, detail="Arquivo de imagem inválido ou corrompido")
+    elif content[4:8] != b"ftyp":
+        raise HTTPException(status_code=415, detail="Arquivo de vídeo inválido")
+
+
+def _projeto_do_usuario(db: Session, projeto_id, usuario_id: int) -> None:
+    """Impede vincular postagem a projeto de outro usuário."""
+    if projeto_id is None:
+        return
+    ok = db.query(Projeto).filter(Projeto.id_projeto == projeto_id, Projeto.usuario_id == usuario_id).first()
+    if not ok:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
 
 
 def _enrich_postagem(p: Postagem) -> dict:
@@ -53,8 +91,8 @@ def _enrich_postagem(p: Postagem) -> dict:
 def listar_postagens(
     status: Optional[str] = None,
     projeto_id: Optional[int] = None,
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -91,6 +129,7 @@ def criar_postagem(
     Cria uma nova postagem.
     Fluxo do frontend: Create → POST /posts → redireciona para /publish
     """
+    _projeto_do_usuario(db, body.projeto_id, current_user.id)
     postagem = Postagem(
         usuario_id=current_user.id,
         titulo=body.titulo,
@@ -142,6 +181,7 @@ def editar_postagem(
     if body.status is not None:
         postagem.status = body.status
     if body.projeto_id is not None:
+        _projeto_do_usuario(db, body.projeto_id, current_user.id)
         postagem.projeto_id = body.projeto_id
 
     db.commit()
@@ -183,29 +223,38 @@ async def upload_midia(
     if not postagem:
         raise HTTPException(status_code=404, detail="Postagem não encontrada")
 
-    # Salva arquivo
-    ext = os.path.splitext(file.filename)[1]
+    # Valida extensão (lista de permissão), tamanho e conteúdo real
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in TIPOS_PERMITIDOS:
+        raise HTTPException(status_code=415, detail=f"Tipo de arquivo não permitido. Use: {', '.join(sorted(TIPOS_PERMITIDOS))}")
+
+    limite = settings.MAX_UPLOAD_MB * 1024 * 1024
+    content = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        content += chunk
+        if len(content) > limite:
+            raise HTTPException(status_code=413, detail=f"Arquivo maior que {settings.MAX_UPLOAD_MB} MB")
+    content = bytes(content)
+    if not content:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+    _validar_conteudo(ext, content)
+
+    mime, tipo, _ = TIPOS_PERMITIDOS[ext]
     filename = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
-
     async with aiofiles.open(filepath, "wb") as f:
-        content = await file.read()
         await f.write(content)
-
-    # Determina tipo de mídia
-    tipo = "imagem"
-    if file.content_type and "video" in file.content_type:
-        tipo = "video"
-    elif file.content_type and "audio" in file.content_type:
-        tipo = "audio"
 
     midia = Midia(
         postagem_id=post_id,
         tipo=tipo,
         url=f"/uploads/{filename}",
-        nome_arquivo=file.filename,
+        nome_arquivo=os.path.basename(file.filename or filename)[:255],
         tamanho_bytes=len(content),
-        mime_type=file.content_type,
+        mime_type=mime,
     )
     db.add(midia)
     db.commit()

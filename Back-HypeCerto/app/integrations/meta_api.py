@@ -13,6 +13,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.models import Agendamento, ContaSocial, Postagem, Midia
+from app.services.crypto import decrypt_token
 import logging
 
 logger = logging.getLogger(__name__)
@@ -150,7 +151,7 @@ async def executar_publicacao(agendamento_id: int, db: Session) -> dict:
                     raise ValueError("Conta Facebook sem page_id ou access_token configurados")
                 resultado = await publicar_facebook(
                     page_id=conta.page_id,
-                    access_token=conta.access_token,
+                    access_token=decrypt_token(conta.access_token),
                     mensagem=postagem.conteudo,
                     imagem_url=imagem_url,
                 )
@@ -159,7 +160,7 @@ async def executar_publicacao(agendamento_id: int, db: Session) -> dict:
                     raise ValueError("Conta Instagram sem ig_user_id ou access_token configurados")
                 resultado = await publicar_instagram(
                     ig_user_id=conta.ig_user_id,
-                    access_token=conta.access_token,
+                    access_token=decrypt_token(conta.access_token),
                     caption=postagem.conteudo,
                     imagem_url=imagem_url,
                 )
@@ -191,11 +192,11 @@ async def executar_publicacao(agendamento_id: int, db: Session) -> dict:
     except Exception as exc:
         logger.error(f"Erro ao publicar agendamento {agendamento_id}: {exc}")
         agendamento.status_envio = "erro"
-        agendamento.erro_mensagem = str(exc)
+        agendamento.erro_mensagem = type(exc).__name__ + ": falha ao publicar (veja os logs do servidor)"
         db.commit()
 
         return {
             "success": False,
-            "message": f"Erro ao publicar: {str(exc)}",
+            "message": "Erro ao publicar. Tente novamente ou reconecte a conta.",
             "mock": settings.USE_MOCK_META_API,
         }

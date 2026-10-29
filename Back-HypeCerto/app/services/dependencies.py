@@ -25,7 +25,10 @@ def get_current_user(
     4. Retorna o objeto Usuario ou lança 401
     """
     payload = decode_token(credentials.credentials)
-    user_id: int = payload.get("sub")
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        user_id = None
 
     if user_id is None:
         raise HTTPException(
@@ -34,7 +37,7 @@ def get_current_user(
         )
 
     user = db.query(Usuario).filter(
-        Usuario.id == int(user_id),
+        Usuario.id == user_id,
         #Usuario.ativo == True,
     ).first()
 

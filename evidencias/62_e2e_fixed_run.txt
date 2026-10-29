@@ -1,0 +1,32 @@
+PASS E01 - Landing carrega | title='HypeCerto - Social Media Automation'
+PASS E02-dashboard - Rota protegida /dashboard sem token redireciona p/ login | url final=http://127.0.0.1:5173/login
+PASS E02-create - Rota protegida /create sem token redireciona p/ login | url final=http://127.0.0.1:5173/login
+PASS E02-publish - Rota protegida /publish sem token redireciona p/ login | url final=http://127.0.0.1:5173/login
+PASS E02-channels - Rota protegida /channels sem token redireciona p/ login | url final=http://127.0.0.1:5173/login
+PASS E02-results - Rota protegida /results sem token redireciona p/ login | url final=http://127.0.0.1:5173/login
+PASS E03 - Signup tem campos | 6 inputs: nome, email, password, confirmPassword, telefone, acceptTerms
+PASS E04 - Cadastro via UI avança para escolha de plano | Teste Grátis |  | Grátis |  | Selecionar | Plano Pro |  | R$ 99 |  | Selecionar | Enterprise |  | Customizado |  | Selecionar
+PASS E05 - Usuário criado no backend (login por API) | 
+PASS E06 - Login via UI leva ao dashboard | url=http://127.0.0.1:5173/dashboard
+FAIL E07 - JWT NÃO é armazenado em localStorage (mitigação de XSS) | token[:20]=eyJhbGciOiJIUzI1NiIs…
+PASS E09a - Menu do usuário (Sair) acessível por TECLADO (focus) | visível após focus=True (menu usa apenas :hover)
+PASS E09 - Logout remove o token de sessão do navegador | token após logout=removido; url=http://127.0.0.1:5173/login
+PASS E09b - Token residual pós-logout é rejeitado pela API | /auth/me => None
+PASS E10 - Mensagem de erro em credencial inválida | HypeCerto | ACESSO À CONTA | Bem-Vindo | Muito bom ter você aqui. |  | Use seu e-mail e senha para acessar sua conta. |  | Email ou se
+PASS A11Y-login - axe-core sem violações critical/serious (/login) | 2 violações (0 crit/serious): landmark-one-main[moderate]x1; region[moderate]x10
+PASS LANG-login - atributo lang do <html> coerente com conteúdo pt-BR | lang='pt-BR'
+PASS A11Y-signup - axe-core sem violações critical/serious (/signup) | 2 violações (0 crit/serious): landmark-one-main[moderate]x1; region[moderate]x10
+PASS LANG-signup - atributo lang do <html> coerente com conteúdo pt-BR | lang='pt-BR'
+PASS A11Y-landing - axe-core sem violações critical/serious (/) | 1 violações (0 crit/serious): region[moderate]x1
+PASS LANG-landing - atributo lang do <html> coerente com conteúdo pt-BR | lang='pt-BR'
+PASS RESP-375-login - Sem rolagem horizontal em 375px (/login) | scrollWidth=375
+PASS RESP-375-signup - Sem rolagem horizontal em 375px (/signup) | scrollWidth=375
+PASS RESP-375- - Sem rolagem horizontal em 375px (/) | scrollWidth=375
+PASS RESP-768-login - Sem rolagem horizontal em 768px (/login) | scrollWidth=768
+PASS RESP-768-signup - Sem rolagem horizontal em 768px (/signup) | scrollWidth=768
+PASS RESP-768- - Sem rolagem horizontal em 768px (/) | scrollWidth=768
+PASS CONSOLE-JS - Sem exceções JS não tratadas | 0: 
+PASS NET-LOCAL - Sem respostas 4xx/5xx em recursos locais (exceto login inválido esperado) | 401 http://localhost:8000/auth/login
+PASS NET-EXT - Recursos externos carregados (bloqueios de rede do sandbox ignorados) | 16 falhas externas: FAILED https://fonts.googleapis.com/css2
+
+TOTAL 30 | PASS 29 | FAIL 1

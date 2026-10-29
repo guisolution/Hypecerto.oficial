@@ -1,0 +1,85 @@
+PASSED test_fixes.py::test_R00_fluxo_principal_sem_500
+PASSED test_fixes.py::test_R00b_arquivar_projeto_e_listagem
+PASSED test_fixes.py::test_R00c_resultados_projetos_com_dados
+PASSED test_fixes.py::test_R00d_dashboard_sem_dados_falsos
+PASSED test_fixes.py::test_R01_token_forjado_com_chave_publica_rejeitado
+PASSED test_fixes.py::test_R01b_producao_sem_secret_nao_sobe
+PASSED test_fixes.py::test_R01c_producao_com_chave_forte_sobe_sem_docs_e_com_hsts
+PASSED test_fixes.py::test_R01d_sub_invalido_vira_401
+PASSED test_fixes.py::test_R02_delete_sem_jwt_negado
+PASSED test_fixes.py::test_R02b_delete_autenticado_exige_senha_e_funciona
+PASSED test_fixes.py::test_R02c_nao_apaga_conta_de_outro
+PASSED test_fixes.py::test_R03_bloqueio_apos_falhas_de_login
+PASSED test_fixes.py::test_R03b_login_valido_nao_e_bloqueado_por_outro_usuario
+PASSED test_fixes.py::test_R03c_delete_com_rate_limit
+PASSED test_fixes.py::test_R04_rejeita_html_svg_php_exe
+PASSED test_fixes.py::test_R04b_rejeita_png_falso_e_extensao_trocada
+PASSED test_fixes.py::test_R04c_limite_de_tamanho
+PASSED test_fixes.py::test_R04d_upload_valido_mime_canonico_e_headers_do_arquivo_servido
+PASSED test_fixes.py::test_R05_token_criptografado_no_banco_e_legivel_na_publicacao
+PASSED test_fixes.py::test_R05b_reconectar_nao_duplica_criptografia
+PASSED test_fixes.py::test_R06_token_expira_em_no_maximo_1h_por_padrao
+PASSED test_fixes.py::test_R06b_token_sem_exp_rejeitado
+PASSED test_fixes.py::test_R14_cabecalhos_de_seguranca_presentes
+PASSED test_fixes.py::test_R14b_status_meta_exige_login
+PASSED test_fixes.py::test_R14c_root_nao_expoe_config
+PASSED test_fixes.py::test_R09_politica_de_senha_no_servidor
+PASSED test_fixes.py::test_R09b_nome_vazio_ou_enorme_rejeitado
+PASSED test_fixes.py::test_R09c_senha_de_72_bytes_exatos_funciona
+PASSED test_fixes.py::test_R10_timing_login_equalizado
+PASSED test_fixes.py::test_R12_ia_limites_e_nulos
+PASSED test_fixes.py::test_R12b_paginacao_com_teto
+PASSED test_fixes.py::test_R13_projeto_de_outro_usuario_recusado
+PASSED test_fixes.py::test_R13b_status_controlado_pelo_sistema
+PASSED test_fixes.py::test_R13c_agendamento_no_passado_recusado
+PASSED test_fixes.py::test_R13d_plataforma_arbitraria_recusada_e_sem_poluicao
+PASSED test_fixes.py::test_R17_oauth_facebook_existe_e_conecta
+PASSED test_fixes.py::test_R17b_oauth_facebook_exige_login
+PASSED test_fixes.py::test_R16_callback_nao_reflete_code
+PASSED test_fixes.py::test_C01_sqli_continua_barrado
+PASSED test_fixes.py::test_C02_isolamento_continua
+PASSED test_fixes.py::test_C03_cors_externo_bloqueado_e_erro_sem_stacktrace
+PASSED test_unit.py::test_U01_hash_nao_e_texto_plano
+PASSED test_unit.py::test_U02_hash_com_salt_unico
+PASSED test_unit.py::test_U03_verify_ok_e_falha
+PASSED test_unit.py::test_U05_token_roundtrip
+PASSED test_unit.py::test_U06_token_expirado_rejeitado
+PASSED test_unit.py::test_U07_token_adulterado_rejeitado
+PASSED test_unit.py::test_U08_alg_none_rejeitado
+PASSED test_unit.py::test_U11_signup_senhas_diferentes_rejeitadas
+PASSED test_unit.py::test_U12_email_invalido_rejeitado
+PASSED test_integration.py::test_I01_signup_login_me
+PASSED test_integration.py::test_I02_login_senha_errada_401
+PASSED test_integration.py::test_I03_email_duplicado_400
+PASSED test_integration.py::test_I04_rota_protegida_sem_token_403_ou_401
+PASSED test_integration.py::test_I05_token_invalido_401
+PASSED test_integration.py::test_I06_resposta_nao_vaza_senha_hash
+PASSED test_integration.py::test_I07_signup_senhas_divergentes_422
+PASSED test_integration.py::test_I10_criar_projeto
+PASSED test_integration.py::test_I11_listar_projetos
+PASSED test_integration.py::test_I12_editar_projeto
+PASSED test_integration.py::test_I13_criar_postagem
+PASSED test_integration.py::test_I14_listar_postagens
+PASSED test_integration.py::test_I15_conectar_canal
+PASSED test_integration.py::test_I16_listar_canais
+PASSED test_integration.py::test_I17_plataformas_padrao
+PASSED test_integration.py::test_I18_dashboard
+PASSED test_integration.py::test_I19_listar_agendamentos
+PASSED test_integration.py::test_I20_gerar_legenda_ia_demo
+PASSED test_integration.py::test_I21_gerar_ideias_ia_demo
+PASSED test_integration.py::test_I22_historico_ia
+PASSED test_integration.py::test_I23_gerar_relatorio
+PASSED test_integration.py::test_I24_listar_metricas
+PASSED test_integration.py::test_I25_progresso_projetos
+PASSED test_integration.py::test_I27_health
+PASSED test_integration.py::test_I29_publicar_direto
+PASSED test_integration.py::test_I30_esqueci_senha
+FAILED test_unit.py::test_U04_bcrypt_trunca_72_bytes_VULN - ValueErr...
+FAILED test_unit.py::test_U09_expiracao_padrao_7_dias_RISCO - Assert...
+FAILED test_unit.py::test_U10_secret_key_padrao_previsivel_VULN - As...
+FAILED test_unit.py::test_U13_sem_politica_de_senha_no_backend_VULN
+FAILED test_unit.py::test_U14_nome_vazio_aceito_VULN - pydantic_core...
+FAILED test_unit.py::test_U15_sem_limite_tamanho_nome - pydantic_cor...
+FAILED test_integration.py::test_I26_meta_status - AssertionError: a...
+FAILED test_integration.py::test_I28_upload_midia - AssertionError: ...
+8 failed, 76 passed in 39.80s
