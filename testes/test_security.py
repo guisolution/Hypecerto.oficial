@@ -5,6 +5,11 @@ import os, time, statistics, pathlib
 from jose import jwt
 import pytest
 
+pytestmark = pytest.mark.skip(
+    reason="Auditoria PRE-correção: estes testes afirmam as vulnerabilidades originais, já corrigidas. "
+           "Cobertura atual em test_fixes.py; registro do estado original em evidencias/50_fixes_on_original.txt."
+)
+
 # ---------------- Autenticação / sessão
 def test_S01_forjar_jwt_com_secret_padrao_VULN(client, user_a):
     forged = jwt.encode({"sub": str(user_a["id"]), "exp": time.time()+3600}, "dev-secret-key-change-in-production", algorithm="HS256")

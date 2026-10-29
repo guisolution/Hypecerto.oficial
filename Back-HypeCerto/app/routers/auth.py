@@ -134,19 +134,14 @@ def delete_account(body: LoginRequest, request: Request, db: Session = Depends(g
 
 
 # ==========================================
-# NOVA ROTA PARA O OAUTH DA META (FACEBOOK)
+# CALLBACK DO OAUTH DA META (FACEBOOK)
 # ==========================================
 @router.get("/callback/facebook", summary="Receber código de autorização da Meta")
 def facebook_oauth_callback(code: str):
     """
     Endpoint acessado pela Meta após o usuário autorizar o aplicativo.
-    Recebe o 'code' na URL, que deverá ser trocado pelo Access Token posteriormente.
+    O 'code' recebido não é devolvido na resposta nem registrado em log
+    (evita refletir/vazar o código de autorização). A troca do 'code' pelo
+    Access Token é feita no fluxo /meta/oauth/facebook.
     """
-    
-    # Aqui você implementará a requisição para trocar o 'code' pelo Token da Meta
-    # usando a biblioteca requests ou httpx do Python.
-    
-    return {
-        "message": "Autenticação com a Meta realizada. Código recebido.",
-        "code": code
-    }
+    return {"message": "Autenticação com a Meta recebida."}
