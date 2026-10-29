@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 venv/
 Back-HypeCerto/uploads/*
+
+# Uploads de teste na raiz
+/uploads/
