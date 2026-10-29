@@ -45,16 +45,16 @@ def test_R00d_dashboard_sem_dados_falsos(client, user_a):
 def test_R01_token_forjado_com_chave_publica_rejeitado(client, user_a):
     forged = pyjwt.encode({"sub": str(user_a["id"]), "exp": time.time() + 3600}, "dev-secret-key-change-in-production", algorithm="HS256")
     assert client.get("/auth/me", headers={"Authorization": f"Bearer {forged}"}).status_code == 401
-def test_R01b_producao_sem_secret_nao_sobe():
+def test_R01b_producao_sem_secret_nao_sobe(tmp_path):
     env = {**os.environ, "ENVIRONMENT": "production", "SECRET_KEY": "", "PYTHONPATH": REPO, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", "from app.config import settings"], env=env, capture_output=True, text=True, cwd="/tmp")
+    r = subprocess.run([sys.executable, "-c", "from app.config import settings"], env=env, capture_output=True, text=True, cwd=str(tmp_path))
     assert r.returncode != 0 and "SECRET_KEY" in (r.stderr + r.stdout)
-def test_R01c_producao_com_chave_forte_sobe_sem_docs_e_com_hsts():
-    env = {**os.environ, "ENVIRONMENT": "production", "SECRET_KEY": "x" * 48, "DATABASE_URL": "sqlite:////tmp/claude-0/ev/run/prod_probe.db", "PYTHONPATH": REPO, "PYTHONDONTWRITEBYTECODE": "1"}
+def test_R01c_producao_com_chave_forte_sobe_sem_docs_e_com_hsts(tmp_path):
+    env = {**os.environ, "ENVIRONMENT": "production", "SECRET_KEY": "x" * 48, "DATABASE_URL": f"sqlite:///{(tmp_path / 'prod_probe.db').as_posix()}", "PYTHONPATH": REPO, "PYTHONDONTWRITEBYTECODE": "1"}
     code = ("from fastapi.testclient import TestClient; from app.main import app; c=TestClient(app); "
             "r=c.get('/'); o=c.options('/auth/me',headers={'Origin':'https://x.github.dev','Access-Control-Request-Method':'GET'}); "
             "print(c.get('/docs').status_code, c.get('/openapi.json').status_code, c.get('/health').json(), 'strict-transport-security' in r.headers, 'access-control-allow-origin' in o.headers)")
-    r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, cwd="/tmp"); out = r.stdout.strip().splitlines()[-1]
+    r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, cwd=str(tmp_path)); out = r.stdout.strip().splitlines()[-1]
     assert out == "404 404 {'status': 'healthy'} True False", out + r.stderr[-300:]
 def test_R01d_sub_invalido_vira_401(client):
     t = pyjwt.encode({"sub": "abc", "exp": time.time() + 60}, __import__("app.config", fromlist=["settings"]).settings.SECRET_KEY, algorithm="HS256")
