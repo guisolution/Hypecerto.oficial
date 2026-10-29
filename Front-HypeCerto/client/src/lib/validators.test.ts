@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateEmail, validatePassword, validatePasswordMatch, validatePhoneBrazil, formatPhoneBrazil, validateFullName, validateSignupForm } from "/tmp/claude-0/ev/fixed/Front-HypeCerto/client/src/lib/validators";
+import { validateEmail, validatePassword, validatePasswordMatch, validatePhoneBrazil, formatPhoneBrazil, validateFullName, validateSignupForm } from "./validators";
 
 describe("TESTES UNITÁRIOS FRONT — validators.ts", () => {
   it("F01 e-mail válido", () => expect(validateEmail("a@b.com")).toBe(true));
