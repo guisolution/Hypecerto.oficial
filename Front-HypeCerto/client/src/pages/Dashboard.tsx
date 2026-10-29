@@ -367,7 +367,7 @@ export default function Dashboard() {
                     <div>
                       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Canais de Publicação</h4>
                       <div className="flex gap-2 flex-wrap">
-                        {selectedPost.channels.map(c => (
+                        {selectedPost.channels.map((c: string) => (
                           <span key={c} className="px-3 py-1 bg-purple-50 text-purple-700 border border-purple-100 rounded-full text-sm font-medium">
                             {c}
                           </span>
